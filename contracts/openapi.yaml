@@ -1,0 +1,525 @@
+openapi: 3.0.3
+info:
+  title: DDX «Смена» — proposed Game API
+  version: 2.0.0
+  description: Портфельный контракт нового модуля. Пути не являются реальными API DDX.
+  x-mobile-contract: Клиент передаёт X-Game-Schema-Version; старый формат получает 426.
+servers:
+  - url: https://example.invalid
+    description: Placeholder; заменяется на внутренний адрес DDX
+security:
+  - bearerAuth: []
+tags:
+  - name: Shift
+paths:
+  /v1/shift:
+    parameters:
+      - $ref: '#/components/parameters/ClientSchemaVersion'
+    get:
+      tags: [Shift]
+      operationId: getShiftEntry
+      summary: Доступность игры и текущая сессия
+      responses:
+        '200':
+          description: Статус входа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '426':
+          $ref: '#/components/responses/UpgradeRequired'
+  /v1/shift/sessions:
+    parameters:
+      - $ref: '#/components/parameters/ClientSchemaVersion'
+    get:
+      tags: [Shift]
+      operationId: listShiftSessions
+      summary: Последние сессии пользователя
+      parameters:
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 20, default: 10}
+      responses:
+        '200':
+          description: История
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/SessionSummary'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '426':
+          $ref: '#/components/responses/UpgradeRequired'
+    post:
+      tags: [Shift]
+      operationId: startShiftSession
+      summary: Начать новую сессию
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Сессия создана; повтор того же ключа возвращает сохранённый ответ
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '426':
+          $ref: '#/components/responses/UpgradeRequired'
+  /v1/shift/sessions/{sessionId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientSchemaVersion'
+    get:
+      tags: [Shift]
+      operationId: getShiftSession
+      summary: Снимок для продолжения или результат
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Текущее состояние и неизменный сценарий
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '426':
+          $ref: '#/components/responses/UpgradeRequired'
+  /v1/shift/sessions/{sessionId}/stages/{stage}/submit:
+    parameters:
+      - $ref: '#/components/parameters/ClientSchemaVersion'
+    post:
+      tags: [Shift]
+      operationId: submitShiftStage
+      summary: Проверить полное размещение объектов
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/Stage'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SubmitRequest'}
+            examples:
+              barbell:
+                value:
+                  expectedVersion: 2
+                  answer:
+                    kind: BARBELL
+                    leftPlateIds: [L_2_5, L_1_25]
+                    rightPlateIds: [R_2_5, R_1_25]
+      responses:
+        '200':
+          description: Принятая попытка; accepted=false оставляет этап текущим
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ActionResult'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '426':
+          $ref: '#/components/responses/UpgradeRequired'
+  /v1/shift/sessions/{sessionId}/help/act:
+    parameters:
+      - $ref: '#/components/parameters/ClientSchemaVersion'
+    post:
+      tags: [Shift]
+      operationId: actShiftHelp
+      summary: Подтвердить очередное действие настройки скамьи
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/HelpRequest'}
+            example:
+              expectedVersion: 3
+              stepId: BACK_PIN
+              targetId: back_pull_pin
+      responses:
+        '200':
+          description: Результат действия; промежуточный успех сохраняет PAUSED_HELP
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ActionResult'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '426':
+          $ref: '#/components/responses/UpgradeRequired'
+  /v1/equipment-guides/{guideId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientSchemaVersion'
+    get:
+      tags: [Shift]
+      operationId: getEquipmentGuide
+      summary: Манифест поэтапной 3D-инструкции по модели оборудования
+      parameters:
+        - name: guideId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Версия ассета, этапы, активные зоны и резервное видео
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GuideManifest'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '426':
+          $ref: '#/components/responses/UpgradeRequired'
+  /v1/shift/sessions/{sessionId}/abandon:
+    parameters:
+      - $ref: '#/components/parameters/ClientSchemaVersion'
+    post:
+      tags: [Shift]
+      operationId: abandonShiftSession
+      summary: Завершить незаконченный проход без результата
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VersionedCommand'}
+      responses:
+        '200':
+          description: Сессия ABANDONED
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '426':
+          $ref: '#/components/responses/UpgradeRequired'
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer}
+  parameters:
+    ClientSchemaVersion:
+      name: X-Game-Schema-Version
+      in: header
+      required: true
+      description: Версия формата сценария и ответов, которую умеет показывать клиент
+      schema: {type: integer, minimum: 1, example: 2}
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Stage:
+      name: stage
+      in: path
+      required: true
+      schema: {type: string, enum: [DUMBBELLS, BARBELL, EQUIPMENT]}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID новой команды; при сетевом повторе тот же UUID и то же тело
+      schema: {type: string, format: uuid}
+  schemas:
+    Entry:
+      type: object
+      required: [available, activeSessionId, requiredClientSchemaVersion]
+      properties:
+        available: {type: boolean}
+        unavailableReason: {type: string, enum: [FLAG_OFF, MEMBERSHIP_REQUIRED], nullable: true}
+        activeSessionId: {type: string, format: uuid, nullable: true}
+        requiredClientSchemaVersion:
+          type: integer
+          minimum: 1
+          example: 2
+          description: Версия активной сессии, если она есть; иначе версия опубликованного сценария для нового запуска
+    SessionSummary:
+      type: object
+      required: [sessionId, status, scenarioVersion, startedAt]
+      properties:
+        sessionId: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/Status'}
+        scenarioVersion: {type: string}
+        startedAt: {type: string, format: date-time}
+        endedAt: {type: string, format: date-time, nullable: true}
+    Status:
+      type: string
+      enum: [ACTIVE, PAUSED_HELP, COMPLETED, ABANDONED, EXPIRED]
+    StageName:
+      type: string
+      enum: [DUMBBELLS, BARBELL, HELP, EQUIPMENT, RESULT, NONE]
+    Session:
+      type: object
+      required: [sessionId, status, stage, version, scenarioVersion, scenarioSchemaVersion, scenario, startedAt, expiresAt]
+      properties:
+        sessionId: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/Status'}
+        stage: {$ref: '#/components/schemas/StageName'}
+        version: {type: integer, minimum: 1}
+        scenarioVersion: {type: string}
+        scenarioSchemaVersion: {type: integer, minimum: 1, example: 2}
+        scenario: {$ref: '#/components/schemas/Scenario'}
+        helpProgress:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/HelpProgress'
+          description: Обязателен при PAUSED_HELP; null для прочих статусов
+        startedAt: {type: string, format: date-time}
+        expiresAt: {type: string, format: date-time}
+        endedAt: {type: string, format: date-time, nullable: true}
+    Scenario:
+      type: object
+      description: Снимок игровой конфигурации. ID нельзя подменять в ответах.
+      required: [dumbbells, barbell, equipment, helpEvent]
+      properties:
+        dumbbells:
+          type: object
+          required: [items, rackSlots]
+          properties:
+            items:
+              type: array
+              minItems: 6
+              items: {$ref: '#/components/schemas/WeightedItem'}
+            rackSlots:
+              type: array
+              items:
+                type: object
+                required: [id, weightKg]
+                properties:
+                  id: {type: string}
+                  weightKg: {type: number}
+        barbell:
+          type: object
+          required: [barKg, preloadedEachSideKg, targetKg, availablePlates]
+          properties:
+            barKg: {type: number, example: 20}
+            preloadedEachSideKg:
+              type: array
+              items: {type: number}
+              example: [20, 5]
+            targetKg: {type: number, example: 77.5}
+            availablePlates:
+              type: array
+              items: {$ref: '#/components/schemas/WeightedItem'}
+        equipment:
+          type: object
+          required: [items, zones]
+          properties:
+            items:
+              type: array
+              minItems: 8
+              items:
+                type: object
+                required: [id, type]
+                properties:
+                  id: {type: string}
+                  type: {type: string, enum: [MAT, MFR, FITBALL, BLOCK]}
+            zones:
+              type: array
+              items: {type: string, enum: [MAT, MFR, FITBALL, BLOCK]}
+        helpEvent:
+          type: object
+          required: [type, equipmentCatalogRef, guideId, guideVersion, steps]
+          properties:
+            type: {type: string, enum: [ADJUST_BENCH]}
+            equipmentCatalogRef: {type: string}
+            guideId: {type: string}
+            guideVersion: {type: string}
+            steps:
+              type: array
+              minItems: 6
+              items: {$ref: '#/components/schemas/HelpStep'}
+    HelpStep:
+      type: object
+      required: [id]
+      properties:
+        id: {type: string, enum: [BACK_PIN, BACK_ADJUST, BACK_LOCK, SEAT_LEVER, SEAT_ADJUST, SEAT_LOCK]}
+        hotspotId: {type: string}
+        clipId: {type: string}
+    HelpProgress:
+      type: object
+      required: [nextStepIndex, completedStepIds]
+      properties:
+        nextStepIndex: {type: integer, minimum: 0, maximum: 5}
+        completedStepIds:
+          type: array
+          items: {type: string}
+    GuideManifest:
+      type: object
+      description: Предложенный контракт доставки содержимого; не API действующего каталога DDX
+      required: [guideId, guideVersion, equipmentCatalogRef, modelAsset, steps, fallbackVideoUrl]
+      properties:
+        guideId: {type: string}
+        guideVersion: {type: string}
+        equipmentCatalogRef: {type: string}
+        modelAsset:
+          type: object
+          required: [url, format, sha256, sizeBytes]
+          properties:
+            url: {type: string, format: uri}
+            format: {type: string, enum: [GLB]}
+            sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+            sizeBytes: {type: integer, minimum: 1}
+        steps:
+          type: array
+          items:
+            type: object
+            required: [id, clipId, cameraPoseId, instruction]
+            properties:
+              id: {type: string}
+              clipId: {type: string}
+              hotspotId: {type: string}
+              cameraPoseId: {type: string}
+              instruction: {type: string}
+        fallbackVideoUrl: {type: string, format: uri}
+    WeightedItem:
+      type: object
+      required: [id, weightKg]
+      properties:
+        id: {type: string}
+        weightKg: {type: number}
+    VersionedCommand:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion: {type: integer, minimum: 1}
+    SubmitRequest:
+      allOf:
+        - $ref: '#/components/schemas/VersionedCommand'
+        - type: object
+          required: [answer]
+          properties:
+            answer:
+              oneOf:
+                - $ref: '#/components/schemas/DumbbellsAnswer'
+                - $ref: '#/components/schemas/BarbellAnswer'
+                - $ref: '#/components/schemas/EquipmentAnswer'
+              discriminator:
+                propertyName: kind
+    DumbbellsAnswer:
+      type: object
+      required: [kind, placements]
+      properties:
+        kind: {type: string, enum: [DUMBBELLS]}
+        placements:
+          type: array
+          description: Ровно один slotId для каждого itemId снимка
+          items: {$ref: '#/components/schemas/Placement'}
+    BarbellAnswer:
+      type: object
+      required: [kind, leftPlateIds, rightPlateIds]
+      properties:
+        kind: {type: string, enum: [BARBELL]}
+        leftPlateIds:
+          type: array
+          items: {type: string}
+        rightPlateIds:
+          type: array
+          items: {type: string}
+    EquipmentAnswer:
+      type: object
+      required: [kind, placements]
+      properties:
+        kind: {type: string, enum: [EQUIPMENT]}
+        placements:
+          type: array
+          items: {$ref: '#/components/schemas/Placement'}
+    Placement:
+      type: object
+      required: [itemId, slotId]
+      properties:
+        itemId: {type: string}
+        slotId: {type: string}
+    HelpRequest:
+      allOf:
+        - $ref: '#/components/schemas/VersionedCommand'
+        - type: object
+          required: [stepId, targetId]
+          properties:
+            stepId: {type: string, enum: [BACK_PIN, BACK_ADJUST, BACK_LOCK, SEAT_LEVER, SEAT_ADJUST, SEAT_LOCK]}
+            targetId: {type: string, description: hotspotId или clipId ожидаемого шага из сценария}
+    ActionResult:
+      type: object
+      required: [accepted, feedbackCode, session]
+      properties:
+        accepted: {type: boolean}
+        feedbackCode:
+          type: string
+          enum: [OK, WRONG_PAIR, WRONG_TOTAL, ASYMMETRIC, WRONG_ZONE, WRONG_CONTROL, WRONG_ORDER]
+        session: {$ref: '#/components/schemas/Session'}
+    Error:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code:
+          type: string
+          enum: [INVALID_PAYLOAD, UNAUTHORIZED, FEATURE_UNAVAILABLE, ACTIVE_SESSION_EXISTS, VERSION_CONFLICT, INVALID_TRANSITION, SESSION_EXPIRED, IDEMPOTENCY_KEY_REUSED, NOT_FOUND, CLIENT_UPGRADE_REQUIRED]
+        message: {type: string}
+        requestId: {type: string}
+        activeSessionId: {type: string, format: uuid, nullable: true}
+        currentVersion: {type: integer, nullable: true}
+  responses:
+    BadRequest:
+      description: Неверная структура или неизвестный/повторный ID объекта
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unauthorized:
+      description: Нет действительной авторизации
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Forbidden:
+      description: Фича/членство недоступны
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    NotFound:
+      description: Сессия отсутствует или принадлежит другому пользователю
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Conflict:
+      description: Конфликт состояния, версии или ключа
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    UpgradeRequired:
+      description: Клиент не поддерживает формат доступного сценария
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}

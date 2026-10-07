@@ -1,0 +1,98 @@
+asyncapi: 3.0.0
+info:
+  title: «Смена» — предлагаемый поток доменных событий
+  version: 1.0.0
+  description: >-
+    Проектный контракт публикации событий игрового сервиса. Использование Kafka
+    показано как возможная интеграция и не заявлено как устройство систем DDX.
+defaultContentType: application/json
+channels:
+  shiftSessionEvents:
+    address: shift.session.events.v1
+    description: События переходов и попыток сессии; порядок по sessionId.
+    messages:
+      ShiftSessionEvent:
+        $ref: '#/components/messages/ShiftSessionEvent'
+    bindings:
+      kafka:
+        topic: shift.session.events.v1
+        bindingVersion: '0.5.0'
+operations:
+  publishShiftSessionEvent:
+    action: send
+    summary: Игровой сервис публикует событие после фиксации команды.
+    channel:
+      $ref: '#/channels/shiftSessionEvents'
+    messages:
+      - $ref: '#/channels/shiftSessionEvents/messages/ShiftSessionEvent'
+components:
+  messages:
+    ShiftSessionEvent:
+      name: ShiftSessionEvent
+      title: Событие игровой сессии
+      contentType: application/json
+      description: >-
+        ID события нужен для устранения повторов на стороне получателя.
+        Данные о реальном посетителе и бронировании не передаются.
+      payload:
+        type: object
+        additionalProperties: false
+        required:
+          - eventId
+          - eventName
+          - occurredAt
+          - sessionId
+          - stateVersion
+          - eventSequence
+          - scenarioVersion
+          - source
+          - payload
+        properties:
+          eventId:
+            type: string
+            format: uuid
+          eventName:
+            type: string
+            enum:
+              - game_session_started
+              - game_stage_attempted
+              - game_stage_completed
+              - game_help_shown
+              - game_help_step_completed
+              - game_help_resolved
+              - game_session_completed
+              - game_session_abandoned
+              - game_session_expired
+          occurredAt:
+            type: string
+            format: date-time
+          sessionId:
+            type: string
+            format: uuid
+          stateVersion:
+            type: integer
+            minimum: 1
+          eventSequence:
+            type: integer
+            minimum: 1
+          scenarioVersion:
+            type: string
+          source:
+            type: string
+            const: shift
+          payload:
+            type: object
+            additionalProperties:
+              type:
+                - string
+                - number
+                - integer
+                - boolean
+                - 'null'
+      bindings:
+        kafka:
+          key:
+            type: string
+            format: uuid
+            description: Значение sessionId; события одной сессии попадают в один раздел.
+          bindingVersion: '0.5.0'

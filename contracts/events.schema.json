@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ddx-smena/events.schema.json",
+  "title": "Shift server domain event (proposed)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventName", "occurredAt", "sessionId", "stateVersion", "eventSequence", "scenarioVersion", "source", "payload"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "eventName": {
+      "type": "string",
+      "enum": [
+        "game_session_started",
+        "game_stage_attempted",
+        "game_stage_completed",
+        "game_help_shown",
+        "game_help_step_completed",
+        "game_help_resolved",
+        "game_session_completed",
+        "game_session_abandoned",
+        "game_session_expired"
+      ]
+    },
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "sessionId": {"type": "string", "format": "uuid"},
+    "stateVersion": {"type": "integer", "minimum": 1},
+    "eventSequence": {"type": "integer", "minimum": 1},
+    "scenarioVersion": {"type": "string"},
+    "source": {"const": "shift"},
+    "payload": {
+      "type": "object",
+      "description": "Типизированные атрибуты конкретного события из docs/05-events.md; новые поля требуют версионирования контракта.",
+      "additionalProperties": {
+        "type": ["string", "number", "integer", "boolean", "null"]
+      }
+    }
+  }
+}
