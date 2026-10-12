@@ -1,0 +1,129 @@
+openapi: 3.0.3
+info:
+  title: First Set Game API (proposal)
+  version: 1.0.0
+  description: Conceptual API; no access to actual DDX integrations.
+servers:
+  - url: https://example.invalid
+security:
+  - bearerAuth: []
+paths:
+  /v1/onboarding/overview:
+    get:
+      summary: Availability and current session
+      responses:
+        '200':
+          description: Overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Overview'
+  /v1/onboarding/sessions:
+    post:
+      summary: Start session
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, maxLength: 128}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '409':
+          description: Active session exists
+  /v1/onboarding/sessions/{sessionId}:
+    parameters:
+      - in: path
+        name: sessionId
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      summary: Get saved session
+      responses:
+        '200':
+          description: Session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '404':
+          description: Not found or not owned by subject
+  /v1/onboarding/sessions/{sessionId}/answers:
+    parameters:
+      - in: path
+        name: sessionId
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      summary: Submit answer; safe for retries
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, maxLength: 128}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stage, expectedRevision, answer]
+              properties:
+                stage: {$ref: '#/components/schemas/Stage'}
+                expectedRevision: {type: integer, minimum: 1}
+                answer: {type: object, additionalProperties: true}
+      responses:
+        '200':
+          description: Accepted or incorrect game answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerResult'
+        '409':
+          description: Stale revision or terminal state
+  /v1/onboarding/sessions/{sessionId}/abandon:
+    parameters:
+      - in: path
+        name: sessionId
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      summary: Abandon active session
+      responses:
+        '200':
+          description: Abandoned
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  schemas:
+    Stage:
+      type: string
+      enum: [DUMBBELLS, BARBELL, BENCH, INVENTORY]
+    Session:
+      type: object
+      required: [id, status, revision, scenarioVersion]
+      properties:
+        id: {type: string, format: uuid}
+        status: {type: string, enum: [ACTIVE, COMPLETED, ABANDONED, EXPIRED]}
+        stage: {$ref: '#/components/schemas/Stage'}
+        revision: {type: integer, minimum: 1}
+        scenarioVersion: {type: string}
+    Overview:
+      type: object
+      required: [available]
+      properties:
+        available: {type: boolean}
+        activeSession:
+          $ref: '#/components/schemas/Session'
+    AnswerResult:
+      type: object
+      required: [accepted, feedback, session]
+      properties:
+        accepted: {type: boolean}
+        feedback: {type: string}
+        session:
+          $ref: '#/components/schemas/Session'

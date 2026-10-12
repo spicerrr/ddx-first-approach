@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:first-set:game-event:v1",
+  "title": "First Set game domain event",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "occurredAt",
+    "sessionId",
+    "scenarioVersion"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "eventType": {
+      "enum": [
+        "game_session_started",
+        "game_stage_completed",
+        "game_session_completed",
+        "game_session_abandoned",
+        "game_session_expired"
+      ]
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sessionId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "scenarioVersion": {
+      "type": "string"
+    },
+    "stage": {
+      "enum": [
+        "DUMBBELLS",
+        "BARBELL",
+        "BENCH",
+        "INVENTORY",
+        null
+      ]
+    }
+  }
+}
