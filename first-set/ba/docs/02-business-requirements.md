@@ -37,5 +37,5 @@
 
 ## Трассировка
 
-BR-03/04 → [системные требования](../sa/docs/02-requirements.md) → [критерии приёмки](../sa/docs/06-acceptance.md) → [демо](../demo/README.md).
-BR-07/08/09 → [границы и события](../sa/docs/01-context.md) → [метрики](../sa/docs/05-events.md).
+BR-03/04 → [системные требования](../../sa/docs/02-requirements.md) → [критерии приёмки](../../sa/docs/06-acceptance.md) → [демо](../../demo/README.md).
+BR-07/08/09 → [границы и события](../../sa/docs/01-context.md) → [метрики](../../sa/docs/05-events.md).
