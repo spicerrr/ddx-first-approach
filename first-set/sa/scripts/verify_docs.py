@@ -69,7 +69,7 @@ for name, body in [("BA", ba_text), ("SA", sa_text)]:
 
 def check_ids(body: str, prefix: str, count: int) -> None:
     expected = {f"{prefix}-{number:02d}" for number in range(1, count + 1)}
-    observed = set(re.findall(rf"\\b{prefix}-\\d{{2}}\\b", body))
+    observed = set(re.findall(rf"\b{prefix}-\d{{2}}\b", body))
     assert observed == expected, f"{prefix}: missing {sorted(expected-observed)}, unknown {sorted(observed-expected)}"
 
 for prefix, count in {"BG":3,"SN":5,"FR":11,"RL":6,"NFR":4,"IC":3,"EV":10,"PD":8}.items():
@@ -77,9 +77,9 @@ for prefix, count in {"BG":3,"SN":5,"FR":11,"RL":6,"NFR":4,"IC":3,"EV":10,"PD":8
 for prefix, count in {"SA":8,"AC":26,"OQ":12}.items():
     check_ids(sa_text, prefix, count)
 for id in (f"AC-{i:02d}" for i in range(1, 27)):
-    assert re.search(rf"^\\| {re.escape(id)} \\|", sa_text, re.MULTILINE), f"{id}: no acceptance row"
+    assert re.search(rf"^\| {re.escape(id)} \|", sa_text, re.MULTILINE), f"{id}: no acceptance row"
 for id in (f"SA-{i:02d}" for i in range(1, 9)):
-    assert re.search(rf"^\\| {re.escape(id)} \\|", sa_text, re.MULTILINE), f"{id}: no traceability row"
+    assert re.search(rf"^\| {re.escape(id)} \|", sa_text, re.MULTILINE), f"{id}: no traceability row"
 
 assert "Smart Start" in (repo / "README.md").read_text(encoding="utf-8")
 assert "accepted" in (sa / "README.md").read_text(encoding="utf-8")
