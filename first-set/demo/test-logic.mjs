@@ -128,3 +128,25 @@ test("new onboarding starts without inheriting old station progress", () => {
   const anotherSession = boot(new Map());
   assert.equal(Object.keys(anotherSession.api.readState().placements.DUMBBELLS).length, 0);
 });
+
+test("CTA does not require a game session or clear an unfinished session", () => {
+  const app = boot();
+  const findButton = (id, part) => {
+    const element = app.get(id).children.find(node => node.textContent.includes(part));
+    assert.ok(element, `missing ${part} in ${id}`);
+    return element;
+  };
+  findButton("welcomeActions", "Smart Start").click();
+  assert.equal(app.api.readState().started, false, "early CTA does not start game");
+  assert.equal(app.api.readState().events.at(-1).eventType, "intro_cta_clicked");
+  findButton("ctaActions", "Назад").click();
+  findButton("welcomeActions", "Начать знакомство").click();
+  app.api.setSelection("PAIR_8");
+  app.api.placeSelected("DUMBBELLS", "RACK_8");
+  findButton("stageActions", "Smart Start").click();
+  const current = app.api.readState();
+  assert.equal(current.stageIndex, 0);
+  assert.equal(Object.keys(current.placements.DUMBBELLS).length, 1);
+  findButton("ctaActions", "Назад").click();
+  assert.equal(app.api.readState().stageIndex, 0);
+});
