@@ -1,5 +1,7 @@
 # 03 · Validation strategy and experiment
 
+[Кейс](../../../README.md) / [Карта артефактов](../../../NAVIGATION.md) / [BA · Бизнес-анализ](../README.md) / **03 · Validation Plan**
+
 **Decision question:** создаёт ли интерактивный формат дополнительную ценность сверх простого и заметного информирования об уже существующих услугах DDX?
 
 ## G0 — существует ли проблема?
@@ -48,4 +50,8 @@
 
 **Экономическая оценка:** прирост доказанного маржинального вклада и подтверждённой экономии − стоимость разработки/поддержки − нагрузка на вводные услуги. Любые численные значения потребуют данных DDX.
 
-[Product brief](01-product-brief.md) · [Evidence register](04-evidence-register.md)
+---
+
+**Связь BA ↔ SA:** [Events](../../sa/docs/05-events.md) · [Acceptance](../../sa/docs/06-acceptance.md)
+
+**Маршрут:** [← Requirements](02-business-requirements.md) · [Карта артефактов](../../../NAVIGATION.md) · [Evidence Register →](04-evidence-register.md)

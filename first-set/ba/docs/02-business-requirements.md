@@ -1,5 +1,7 @@
 # 02 · Requirements model: business → stakeholder → solution
 
+[Кейс](../../../README.md) / [Карта артефактов](../../../NAVIGATION.md) / [BA · Бизнес-анализ](../README.md) / **02 · Requirements**
+
 Не называем каждое поведение интерфейса «бизнес-требованием». Уровни ниже различаются по **объекту утверждения** и **способу проверки**; отдельные свойства могут классифицироваться одновременно по типу и уровню.
 
 ## Business goals / outcomes
@@ -77,4 +79,8 @@ BG-01 — **primary outcome** для продуктового экспериме
 
 `RL-01/RL-02 → FR-02/07 → SA-01/04 → AC-15/16`.
 
-[SA requirements](../../sa/docs/02-requirements.md) · [Acceptance](../../sa/docs/06-acceptance.md) · [Validation](03-validation-plan.md)
+---
+
+**Связь BA ↔ SA:** [System Requirements](../../sa/docs/02-requirements.md) · [Acceptance](../../sa/docs/06-acceptance.md)
+
+**Маршрут:** [← Product Brief](01-product-brief.md) · [Карта артефактов](../../../NAVIGATION.md) · [Validation Plan →](03-validation-plan.md)

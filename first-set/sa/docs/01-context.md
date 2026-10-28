@@ -1,5 +1,7 @@
 # 01 · System context (proposed)
 
+[Кейс](../../../README.md) / [Карта артефактов](../../../NAVIGATION.md) / [SA · Системный анализ](../README.md) / **01 · System Context**
+
 ## Scope and assumptions
 
 Цель потенциального изменения — добавить необязательный игровой сценарий в существующее DDX Fitness App **без переноса** в игру функций членства, платежей, записи, реальных посещений и InBody. Публичная информация не позволяет утверждать, что DDX располагает именно такими техническими сервисами: таблица ниже отражает **логические ответственности**.
@@ -48,4 +50,8 @@ sequenceDiagram
 - Экспериментальная связь `game_session ↔ member subject ↔ booking ↔ attendance` не копируется целиком в игровую БД.
 - Клиентский localStorage-прототип реализует лишь UI и локальную симуляцию. Серверный контракт, контролируемое хранение и контроль доступа пока не реализованы.
 
-[OpenAPI](../contracts/openapi.yaml) · [Пример контента](../contracts/scenario-v1.sample.json) · [Requirements](02-requirements.md)
+---
+
+**Связь SA ↔ BA:** [Product Brief](../../ba/docs/01-product-brief.md) · [Evidence Register](../../ba/docs/04-evidence-register.md)
+
+**Маршрут:** [← Раздел SA](../README.md) · [Карта артефактов](../../../NAVIGATION.md) · [System Requirements →](02-requirements.md)

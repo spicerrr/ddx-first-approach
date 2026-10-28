@@ -1,5 +1,7 @@
 # 04 · Logical data model (proposed)
 
+[Кейс](../../../README.md) / [Карта артефактов](../../../NAVIGATION.md) / [SA · Системный анализ](../README.md) / **04 · Data Model**
+
 Это **логическая модель ответственности игрового домена**, не SQL-схема действующей БД DDX. Внешние данные о членстве, расписании и записи **не копируются** в игровой домен.
 
 ```mermaid
@@ -73,4 +75,8 @@ erDiagram
 - События игрового домена не содержат ФИО, номера телефона, данных InBody, платежей.
 - Retention, TTL идемпотентности, использование технических логов и требования удаления данных определяются по политике DDX; точных чисел нет.
 
-[State machine](03-state-machine.md) · [Events](05-events.md)
+---
+
+**Связь SA ↔ BA:** [Business Rules](../../ba/docs/02-business-requirements.md) · [Product Decisions](../../ba/docs/05-decisions.md)
+
+**Маршрут:** [← State Machine](03-state-machine.md) · [Карта артефактов](../../../NAVIGATION.md) · [Events →](05-events.md)

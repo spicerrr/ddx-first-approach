@@ -1,5 +1,7 @@
 # 06 · Acceptance scenarios
 
+[Кейс](../../../README.md) / [Карта артефактов](../../../NAVIGATION.md) / [SA · Системный анализ](../README.md) / **06 · Acceptance**
+
 Объект проверки: **предлагаемый сервис + клиент**, а не локальный прототип; мок подтверждает только пользовательский интерактивный путь.
 
 | ID | Given / When | Expected result |
@@ -35,4 +37,8 @@
 
 **Test plan:** для AC-10/11/20/22/23/24 нужен сервер или контрактный fake; браузерный localStorage-прототип не подтверждает сетевую семантику.
 
-[System requirements](02-requirements.md) · [OpenAPI](../contracts/openapi.yaml)
+---
+
+**Связь SA ↔ BA:** [Solution Requirements](../../ba/docs/02-business-requirements.md) · [Validation Plan](../../ba/docs/03-validation-plan.md)
+
+**Маршрут:** [← Events](05-events.md) · [Карта артефактов](../../../NAVIGATION.md) · [Open Questions →](07-open-questions.md)

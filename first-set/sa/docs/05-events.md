@@ -1,5 +1,7 @@
 # 05 · Event ownership and measurement
 
+[Кейс](../../../README.md) / [Карта артефактов](../../../NAVIGATION.md) / [SA · Системный анализ](../README.md) / **05 · Events**
+
 События **игрового домена** и **существующих систем DDX** не взаимозаменяемы. Имена ниже проектные.
 
 | Event | Источник истины | Что подтверждает | Чего не подтверждает |
@@ -30,4 +32,8 @@
 - Отсутствие `intro_attendance_confirmed` запрещает считать `intro_cta_clicked` посещением.
 - Участник контрольной группы A входит в denominator ITT, даже если игру никогда не видел.
 
-[Event schema](../contracts/events.schema.json) · [Validation plan](../../ba/docs/03-validation-plan.md)
+---
+
+**Связь SA ↔ BA:** [Validation Plan](../../ba/docs/03-validation-plan.md) · [Evidence Register](../../ba/docs/04-evidence-register.md)
+
+**Маршрут:** [← Data Model](04-data-model.md) · [Карта артефактов](../../../NAVIGATION.md) · [Acceptance →](06-acceptance.md)

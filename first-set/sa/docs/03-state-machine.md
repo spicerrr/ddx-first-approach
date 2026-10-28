@@ -1,5 +1,7 @@
 # 03 · Session state machine
 
+[Кейс](../../../README.md) / [Карта артефактов](../../../NAVIGATION.md) / [SA · Системный анализ](../README.md) / **03 · State Machine**
+
 Разделяем **жизненный цикл сессии** (`status`) и **позицию внутри сценария** (`stage` + `stageProgress`). `COMPLETED` — терминальный исход, не пятая станция.
 
 ```mermaid
@@ -44,4 +46,8 @@ stateDiagram-v2
 
 Unique ACTIVE session is enforced in storage, not via GET-before-POST. Compare-and-swap on `revision` applies at **each** accepted action. Transaction groups session update, idempotency record and outbox write. Server is authoritative; client progress is display state only.
 
-[System requirements](02-requirements.md) · [Data model](04-data-model.md)
+---
+
+**Связь SA ↔ BA:** [Product Decisions](../../ba/docs/05-decisions.md) · [Business Rules](../../ba/docs/02-business-requirements.md)
+
+**Маршрут:** [← System Requirements](02-requirements.md) · [Карта артефактов](../../../NAVIGATION.md) · [Data Model →](04-data-model.md)

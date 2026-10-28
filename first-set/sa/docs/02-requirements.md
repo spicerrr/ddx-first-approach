@@ -1,5 +1,7 @@
 # 02 · System requirements and vertical slice
 
+[Кейс](../../../README.md) / [Карта артефактов](../../../NAVIGATION.md) / [SA · Системный анализ](../README.md) / **02 · System Requirements**
+
 Функции — из [BA requirements](../../ba/docs/02-business-requirements.md). Имена модулей и API здесь **проектные**, а не описание закрытой архитектуры DDX.
 
 ## Traceability: BA → SA → acceptance
@@ -49,4 +51,8 @@
 - Отсутствие мест в Smart Start не изменяет `COMPLETED`.
 - Условие истечения сессии, retention, real eligibility и SLA определяются после согласования с владельцами платформы.
 
-[State machine](03-state-machine.md) · [Data model](04-data-model.md) · [OpenAPI](../contracts/openapi.yaml) · [Acceptance](06-acceptance.md)
+---
+
+**Связь SA ↔ BA:** [Business Requirements](../../ba/docs/02-business-requirements.md) · [Product Decisions](../../ba/docs/05-decisions.md)
+
+**Маршрут:** [← System Context](01-context.md) · [Карта артефактов](../../../NAVIGATION.md) · [State Machine →](03-state-machine.md)

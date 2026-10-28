@@ -4,6 +4,16 @@
 
 У DDX уже есть Smart Start и ознакомительная тренировка. Вопрос проекта — существует ли среди новых участников проблема **обнаружения и использования** этих услуг и может ли короткая интерактивная практика помочь лучше обычной информационной карточки. Данных, подтверждающих такую проблему, у автора нет: проект не представляет её как установленный факт.
 
+## С чего начать
+
+[**Карта артефактов BA ↔ SA →**](NAVIGATION.md) — сквозной маршрут «гипотеза → требования → состояния/контракты → проверка». На каждой странице есть обратные переходы к соседним документам и связанной части BA/SA.
+
+| Что интересует | Начать здесь | Затем |
+|---|---|---|
+| **Продуктовая постановка** | [Product Brief](first-set/ba/docs/01-product-brief.md) | [Evidence](first-set/ba/docs/04-evidence-register.md) → [Validation](first-set/ba/docs/03-validation-plan.md) |
+| **Как формализовано решение** | [BA requirements](first-set/ba/docs/02-business-requirements.md) | [SA requirements](first-set/sa/docs/02-requirements.md) → [API](first-set/sa/contracts/openapi.yaml) |
+| **Как работает сценарий** | [State machine](first-set/sa/docs/03-state-machine.md) | [Acceptance](first-set/sa/docs/06-acceptance.md) → [Интерактивное демо](first-set/demo/README.md) |
+
 ## Что можно посмотреть
 
 | Направление | Артефакт | Для чего |
@@ -11,7 +21,7 @@
 | [Бизнес-анализ](first-set/ba/README.md) | [Product brief](first-set/ba/docs/01-product-brief.md), [модель требований](first-set/ba/docs/02-business-requirements.md), [эксперимент](first-set/ba/docs/03-validation-plan.md) | Развести наблюдения, неизвестные данные, гипотезы, решение и измерение |
 | [Системный анализ](first-set/sa/README.md) | [Состояния](first-set/sa/docs/03-state-machine.md), [данные](first-set/sa/docs/04-data-model.md), [OpenAPI](first-set/sa/contracts/openapi.yaml), [приёмка](first-set/sa/docs/06-acceptance.md) | Предложенная реализация четырёх станций и границы интеграций |
 | [Интерактивный прототип](first-set/demo/README.md) | [HTML](first-set/demo/index.html) · [сценарная логика](first-set/demo/logic.js) | Проверить четыре игровые механики, ошибки, сохранение, итог и демонстрационный переход |
-| [Аудит и дефекты](AUDIT.md) | Приоритизированный список разрывов с критериями устранения | Увидеть ограничения кейса и план следующих проверок |
+| [Аудит и ограничения](AUDIT.md) | Приоритизированный список разрывов с критериями устранения | Увидеть ограничения кейса и план следующих проверок |
 
 ## Коротко о сценарии
 
