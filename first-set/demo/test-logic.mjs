@@ -73,6 +73,7 @@ test("four stations, error recovery, unique completion events, and resume", () =
     api.setSelection(item); api.placeSelected("DUMBBELLS", target);
   }
   assert.equal(api.readState().stageIndex, 1);
+  app.get("lessonActions").children[0].click(); // next station from full-screen explanation
 
   api.setSelection("DISK_5_A"); api.placeSelected("BARBELL", "LEFT");
   api.setSelection("DISK_5_B"); api.placeSelected("BARBELL", "LEFT");
@@ -83,6 +84,7 @@ test("four stations, error recovery, unique completion events, and resume", () =
     api.setSelection(item); api.placeSelected("BARBELL", side);
   }
   assert.equal(api.readState().stageIndex, 2);
+  app.get("lessonActions").children[0].click();
 
   const selectBench = label => {
     const button = app.get("targets").children.find(child => child.textContent === label);
@@ -100,6 +102,7 @@ test("four stations, error recovery, unique completion events, and resume", () =
     "До использования убедиться в фиксации и устойчивости"
   ]) selectBench(label);
   assert.equal(api.readState().stageIndex, 3);
+  app.get("lessonActions").children[0].click();
 
   for (const [item, zone] of [
     ["MAT_1", "MATS"], ["BAND_1", "BANDS"],
