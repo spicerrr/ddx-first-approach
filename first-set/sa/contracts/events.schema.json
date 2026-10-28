@@ -1,22 +1,28 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:first-set:game-event:v1",
-  "title": "First Set game domain event",
+  "$id": "urn:first-approach:game-event:v1",
+  "title": "Proposed game-domain event v1 — not a DDX production contract",
   "type": "object",
+  "additionalProperties": false,
   "required": [
+    "schemaVersion",
     "eventId",
     "eventType",
     "occurredAt",
     "sessionId",
-    "scenarioVersion"
+    "scenarioVersion",
+    "revision"
   ],
-  "additionalProperties": false,
   "properties": {
+    "schemaVersion": {
+      "const": "1"
+    },
     "eventId": {
       "type": "string",
       "format": "uuid"
     },
     "eventType": {
+      "type": "string",
       "enum": [
         "game_session_started",
         "game_stage_completed",
@@ -34,16 +40,40 @@
       "format": "uuid"
     },
     "scenarioVersion": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
     },
     "stage": {
+      "type": "string",
       "enum": [
         "DUMBBELLS",
         "BARBELL",
         "BENCH",
-        "INVENTORY",
-        null
+        "INVENTORY"
       ]
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "eventType": {
+            "const": "game_stage_completed"
+          }
+        },
+        "required": [
+          "eventType"
+        ]
+      },
+      "then": {
+        "required": [
+          "stage"
+        ]
+      }
+    }
+  ]
 }
