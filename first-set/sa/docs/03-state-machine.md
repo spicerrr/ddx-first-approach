@@ -31,7 +31,7 @@ stateDiagram-v2
 | `submitAction`, reused key with changed payload | Key already bound to different payload | 409 IDEMPOTENCY_KEY_REUSED; no effect |
 | `abandon` | ACTIVE + current revision | ABANDONED; revision+1 |
 | `expire` | ACTIVE + configured expiry policy | EXPIRED; revision+1; policy defined later |
-| `CTA` | Session COMPLETED | Client navigation only; no session change and no booking write |
+| `CTA` | Any stage or no game session | Client navigation only; no session change and no booking write |
 
 ## Example: lost HTTP response
 
