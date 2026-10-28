@@ -14,6 +14,33 @@ tags:
 security:
   - bearerAuth: []
 paths:
+  /v1/onboarding/scenarios/{scenarioVersion}:
+    parameters:
+      - name: scenarioVersion
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+    get:
+      tags: [Game session]
+      operationId: getScenarioManifest
+      summary: Fetch immutable, approved scenario content
+      description: |
+        A game session pins scenarioVersion. Client must display the corresponding
+        manifest, not assume the latest client content is backward-compatible.
+        Manifest contains presentation data; authoritative answers remain server-side.
+      responses:
+        '200':
+          description: Scenario stage definitions for the requested version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScenarioManifest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Scenario version not found
   /v1/onboarding/overview:
     get:
       tags: [Game session]
@@ -233,6 +260,58 @@ components:
                   revision: 2
                   scenarioVersion: "1.0"
   schemas:
+    ScenarioManifest:
+      type: object
+      additionalProperties: false
+      required: [scenarioId, version, locale, stages]
+      properties:
+        scenarioId:
+          type: string
+        version:
+          type: string
+        locale:
+          type: string
+          example: ru-RU
+        stages:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/ScenarioStage'
+    ScenarioStage:
+      type: object
+      additionalProperties: false
+      required: [stage, interactionKind, title, instruction, items, targets]
+      properties:
+        stage:
+          $ref: '#/components/schemas/Stage'
+        interactionKind:
+          type: string
+          enum: [PAIR_TO_SLOT, DISK_TO_SIDE, ORDERED_CHECKS, ITEM_TO_ZONE]
+        title:
+          type: string
+        instruction:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScenarioOption'
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScenarioOption'
+    ScenarioOption:
+      type: object
+      additionalProperties: false
+      required: [id, label]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        weightKg:
+          type: number
+          minimum: 0
     Stage:
       type: string
       enum: [DUMBBELLS, BARBELL, BENCH, INVENTORY]
@@ -319,7 +398,7 @@ components:
           enum: [BARBELL_PLACEMENT]
         diskId:
           type: string
-          description: Unique virtual disk ID from scenario (e.g. LEFT_5).
+          description: Unique virtual disk ID from scenario (e.g. DISK_5_A).
         side:
           type: string
           enum: [LEFT, RIGHT]
