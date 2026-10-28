@@ -1,129 +1,374 @@
 openapi: 3.0.3
 info:
-  title: First Set Game API (proposal)
-  version: 1.0.0
-  description: Conceptual API; no access to actual DDX integrations.
+  title: First Approach Game API (proposal)
+  version: 0.2.0
+  description: |
+    Proposed contract for an optional onboarding game. Not an actual DDX API.
+    This service does not modify membership, payments or existing bookings.
+    Server-authoritative session, optimistic concurrency and replay-safe commands.
 servers:
   - url: https://example.invalid
+    description: Documentation-only endpoint; not a real service
+tags:
+  - name: Game session
 security:
   - bearerAuth: []
 paths:
   /v1/onboarding/overview:
     get:
-      summary: Availability and current session
+      tags: [Game session]
+      operationId: getOnboardingOverview
+      summary: Discover eligibility and active game session
+      description: |
+        available means the offer may be displayed for this subject, not that a
+        booking slot is available. Existing session may be readable separately.
       responses:
         '200':
-          description: Overview
+          description: Current offer and session overview
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Overview'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /v1/onboarding/sessions:
     post:
-      summary: Start session
+      tags: [Game session]
+      operationId: startGameSession
+      summary: Create one active session
+      description: |
+        The member subject is inferred from the bearer token. Same idempotency
+        key and same request replay the original response; a different key while
+        ACTIVE returns 409 ACTIVE_SESSION_EXISTS. Experiment eligibility is
+        evaluated by an integration adapter not defined in this proposal.
       parameters:
-        - in: header
-          name: Idempotency-Key
-          required: true
-          schema: {type: string, maxLength: 128}
+        - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
-          description: Created
+          description: Session created (also returned on identical replay)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
-          description: Active session exists
+          $ref: '#/components/responses/Conflict'
   /v1/onboarding/sessions/{sessionId}:
     parameters:
-      - in: path
-        name: sessionId
-        required: true
-        schema: {type: string, format: uuid}
+      - $ref: '#/components/parameters/SessionId'
     get:
-      summary: Get saved session
+      tags: [Game session]
+      operationId: getGameSession
+      summary: Read authoritative progress
+      description: Returns 404 for an unknown or other participant's session.
       responses:
         '200':
-          description: Session
+          description: Saved progress
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Not found or not owned by subject
+          $ref: '#/components/responses/NotFound'
   /v1/onboarding/sessions/{sessionId}/answers:
     parameters:
-      - in: path
-        name: sessionId
-        required: true
-        schema: {type: string, format: uuid}
+      - $ref: '#/components/parameters/SessionId'
     post:
-      summary: Submit answer; safe for retries
+      tags: [Game session]
+      operationId: submitGameAction
+      summary: Submit one interactive action
+      description: |
+        Invalid game choice with otherwise valid request returns 200 and
+        accepted=false, with explanatory feedback. Valid correct action advances
+        stageProgress and increments revision once. Replay checks the idempotency
+        record before checking expectedRevision. Stale revision, incorrect stage
+        and terminal state yield 409 with machine-readable error code.
       parameters:
-        - in: header
-          name: Idempotency-Key
-          required: true
-          schema: {type: string, maxLength: 128}
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerRequest'
+            examples:
+              dumbbell:
+                summary: Place one pair
+                value:
+                  stage: DUMBBELLS
+                  expectedRevision: 1
+                  action:
+                    kind: DUMBBELL_PLACEMENT
+                    itemId: PAIR_8
+                    targetId: RACK_8
+              bench:
+                summary: Complete one safety check
+                value:
+                  stage: BENCH
+                  expectedRevision: 8
+                  action:
+                    kind: BENCH_CHECK
+                    actionCode: AREA_CLEAR
+      responses:
+        '200':
+          description: Accepted or rejected game action; never implies booking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/onboarding/sessions/{sessionId}/abandon:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [Game session]
+      operationId: abandonGameSession
+      summary: Explicitly abandon active session
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [stage, expectedRevision, answer]
+              additionalProperties: false
+              required: [expectedRevision]
               properties:
-                stage: {$ref: '#/components/schemas/Stage'}
-                expectedRevision: {type: integer, minimum: 1}
-                answer: {type: object, additionalProperties: true}
+                expectedRevision:
+                  type: integer
+                  minimum: 1
       responses:
         '200':
-          description: Accepted or incorrect game answer
+          description: Abandoned (also for identical replay)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AnswerResult'
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
-          description: Stale revision or terminal state
-  /v1/onboarding/sessions/{sessionId}/abandon:
-    parameters:
-      - in: path
-        name: sessionId
-        required: true
-        schema: {type: string, format: uuid}
-    post:
-      summary: Abandon active session
-      responses:
-        '200':
-          description: Abandoned
+          $ref: '#/components/responses/Conflict'
 components:
   securitySchemes:
-    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Proposed authenticated app context; identity provider is not defined.
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Client-generated stable unique key for this operation. Reuse only for an
+        identical retry. Scope includes user and operation/session.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+  responses:
+    BadRequest:
+      description: Invalid payload or action shape
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Forbidden:
+      description: Subject is not eligible for game offer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    NotFound:
+      description: Session does not exist or is not owned by subject
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Conflict:
+      description: Session, version or idempotency conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          examples:
+            stale:
+              value:
+                code: STALE_REVISION
+                message: Refresh session before proceeding
+                currentSession:
+                  id: 11111111-1111-4111-8111-111111111111
+                  status: ACTIVE
+                  stage: DUMBBELLS
+                  stageProgress: 1
+                  revision: 2
+                  scenarioVersion: "1.0"
   schemas:
     Stage:
       type: string
       enum: [DUMBBELLS, BARBELL, BENCH, INVENTORY]
     Session:
       type: object
-      required: [id, status, revision, scenarioVersion]
+      additionalProperties: false
+      required: [id, status, stage, stageProgress, revision, scenarioVersion]
       properties:
-        id: {type: string, format: uuid}
-        status: {type: string, enum: [ACTIVE, COMPLETED, ABANDONED, EXPIRED]}
-        stage: {$ref: '#/components/schemas/Stage'}
-        revision: {type: integer, minimum: 1}
-        scenarioVersion: {type: string}
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [ACTIVE, COMPLETED, ABANDONED, EXPIRED]
+        stage:
+          type: string
+          nullable: true
+          enum: [DUMBBELLS, BARBELL, BENCH, INVENTORY]
+          description: Null on terminal session, including COMPLETED.
+        stageProgress:
+          type: integer
+          minimum: 0
+          description: Count of accepted actions within current stage; 0 on terminal.
+        revision:
+          type: integer
+          minimum: 1
+        scenarioVersion:
+          type: string
+          minLength: 1
     Overview:
       type: object
+      additionalProperties: false
       required: [available]
       properties:
-        available: {type: boolean}
+        available:
+          type: boolean
+          description: Eligibility to offer game, not eligibility for booking.
         activeSession:
           $ref: '#/components/schemas/Session'
+    AnswerRequest:
+      type: object
+      additionalProperties: false
+      required: [stage, expectedRevision, action]
+      properties:
+        stage:
+          $ref: '#/components/schemas/Stage'
+        expectedRevision:
+          type: integer
+          minimum: 1
+        action:
+          oneOf:
+            - $ref: '#/components/schemas/DumbbellPlacement'
+            - $ref: '#/components/schemas/BarbellPlacement'
+            - $ref: '#/components/schemas/BenchCheck'
+            - $ref: '#/components/schemas/InventoryPlacement'
+          discriminator:
+            propertyName: kind
+            mapping:
+              DUMBBELL_PLACEMENT: '#/components/schemas/DumbbellPlacement'
+              BARBELL_PLACEMENT: '#/components/schemas/BarbellPlacement'
+              BENCH_CHECK: '#/components/schemas/BenchCheck'
+              INVENTORY_PLACEMENT: '#/components/schemas/InventoryPlacement'
+    DumbbellPlacement:
+      type: object
+      additionalProperties: false
+      required: [kind, itemId, targetId]
+      properties:
+        kind:
+          type: string
+          enum: [DUMBBELL_PLACEMENT]
+        itemId:
+          type: string
+          description: Pair ID from pinned scenario (e.g. PAIR_8)
+        targetId:
+          type: string
+          description: Slot ID from pinned scenario (e.g. RACK_8)
+    BarbellPlacement:
+      type: object
+      additionalProperties: false
+      required: [kind, diskId, side]
+      properties:
+        kind:
+          type: string
+          enum: [BARBELL_PLACEMENT]
+        diskId:
+          type: string
+          description: Unique virtual disk ID from scenario (e.g. LEFT_5).
+        side:
+          type: string
+          enum: [LEFT, RIGHT]
+    BenchCheck:
+      type: object
+      additionalProperties: false
+      required: [kind, actionCode]
+      properties:
+        kind:
+          type: string
+          enum: [BENCH_CHECK]
+        actionCode:
+          type: string
+          enum: [AREA_CLEAR, UNLOADED, MODEL_GUIDANCE, ASK_TRAINER_IF_UNSURE, NO_FORCE, VERIFY_LOCK]
+    InventoryPlacement:
+      type: object
+      additionalProperties: false
+      required: [kind, itemId, targetId]
+      properties:
+        kind:
+          type: string
+          enum: [INVENTORY_PLACEMENT]
+        itemId:
+          type: string
+          description: Inventory item ID from pinned scenario.
+        targetId:
+          type: string
+          description: Storage zone ID from pinned scenario.
     AnswerResult:
       type: object
+      additionalProperties: false
       required: [accepted, feedback, session]
       properties:
-        accepted: {type: boolean}
-        feedback: {type: string}
+        accepted:
+          type: boolean
+          description: Validity of in-game action; not HTTP transport acceptance.
+        feedback:
+          type: string
         session:
+          $ref: '#/components/schemas/Session'
+    ApiError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [INVALID_REQUEST, UNAUTHORIZED, NOT_ELIGIBLE, SESSION_NOT_FOUND, ACTIVE_SESSION_EXISTS, STALE_REVISION, POSITION_MISMATCH, SESSION_TERMINAL, IDEMPOTENCY_KEY_REUSED]
+        message:
+          type: string
+        currentSession:
           $ref: '#/components/schemas/Session'
