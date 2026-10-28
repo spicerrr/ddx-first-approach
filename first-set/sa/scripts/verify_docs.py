@@ -52,6 +52,22 @@ for name in [
 ]:
     assert (sa / "docs" / name).is_file(), name
 
+
+# Cross-section navigation is a contract between BA, SA and the overview.
+nav_file = repository / "NAVIGATION.md"
+nav = nav_file.read_text(encoding="utf-8")
+assert "Маршрут по задаче" in nav
+for group, other in [("ba", "sa"), ("sa", "ba")]:
+    index = (repository / "first-set" / group / "README.md").read_text(encoding="utf-8")
+    assert "../../NAVIGATION.md" in index
+    assert f"../{other}/README.md" in index
+    assert "Общая связка BA ↔ SA" in index
+    for doc in (repository / "first-set" / group / "docs").glob("*.md"):
+        body = doc.read_text(encoding="utf-8")
+        assert "[Карта артефактов](../../../NAVIGATION.md)" in body, doc
+        assert f"../../{other}/docs/" in body, doc
+        assert "**Маршрут:**" in body, doc
+
 broken_links = []
 for markdown in repository.rglob("*.md"):
     if ".git" in markdown.parts:
@@ -65,4 +81,4 @@ for markdown in repository.rglob("*.md"):
             broken_links.append(f"{markdown.relative_to(repository)} → {destination}")
 assert not broken_links, "\n".join(broken_links)
 
-print("OK: valid OpenAPI / event schema, station parity, local Markdown links")
+print("OK: contracts, scenario, BA/SA cross-navigation and local Markdown links")
