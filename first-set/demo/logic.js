@@ -1,37 +1,293 @@
-const KEY="first-set-demo-v1";
-const labels=["Гантели","Штанга","Скамья","Инвентарь"];
-const tasks=[
- [{q:"Куда вернуть гантель весом 8 кг?",a:["На стойку с маркировкой 8 кг","На свободный участок пола","На стойку с маркировкой 16 кг"],ok:0,note:"Гантели возвращают на предназначенное место: это освобождает пространство и помогает следующему участнику."},
- {q:"После подхода осталась пара гантелей по 16 кг. Как поступить?",a:["Оставить у скамьи","Поставить обе на стойку с маркировкой 16 кг","Положить на ближайшую платформу"],ok:1,note:"После подхода инвентарь необходимо вернуть на место."}],
- [{q:"Как размещать блины при подготовке штанги?",a:["По-разному, если общий вес правильный","Симметрично с каждой стороны","На одной стороне для удобства"],ok:1,note:"Симметричное размещение дисков — базовое условие корректной подготовки штанги."},
- {q:"Ты не уверен(а), как закрепить диски. Что делать?",a:["Начать подход без проверки","Попросить тренера показать фиксацию","Увеличить вес, чтобы диски не двигались"],ok:1,note:"Сомневаясь в фиксации оборудования, следует обратиться к тренеру. Эта игра не заменяет практический инструктаж."}],
- [{q:"Перед регулировкой скамьи нужно…",a:["Убедиться, что на ней никто не занимается","Сесть и двигать фиксатор под нагрузкой","Попросить другого новичка подержать спинку"],ok:0,note:"Регулировку начинают с подготовки свободного и безопасного оборудования."},
- {q:"Ты не понимаешь устройство фиксатора. Что выбрать?",a:["Усилить давление на рычаг","Двигать спинку наугад","Обратиться к тренеру и посмотреть инструкцию"],ok:2,note:"Нельзя силой или наугад использовать незнакомые механизмы."},
- {q:"Положение спинки изменено. Что далее?",a:["Проверить, что механизм надёжно зафиксирован","Сразу начинать работу","Оставить регулировку полуоткрытой"],ok:0,note:"Перед использованием оборудования проверяют правильность фиксации и устойчивость."}],
- [{q:"Куда отнести коврик после занятия?",a:["Оставить рядом со скамьёй","В предназначенную стойку/зону","Положить на беговую дорожку"],ok:1,note:"Коврики и другой инвентарь возвращают в отмеченные зоны хранения."},
- {q:"В проходе лежит инвентарь. Как поступить?",a:["Не обращать внимания","Убрать в соответствующую зону, если это безопасно","Передвинуть к любому тренажёру"],ok:1,note:"Свободные проходы и порядок в тренировочных зонах важны для комфорта и безопасности посетителей."}]
-];
-let state=read();let notice="";
-const $=id=>document.getElementById(id);
-function initial(){return {stage:0,step:0,done:false,events:[],startedAt:new Date().toISOString()}}
-function read(){try{return JSON.parse(localStorage.getItem(KEY))||initial()}catch{return initial()}}
-function save(){localStorage.setItem(KEY,JSON.stringify(state))}
-function event(name,properties={}){state.events.push({name,at:new Date().toISOString(),...properties});save()}
-function esc(s){return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")}
-function button(text,handler,cls="btn"){const b=document.createElement("button");b.className=cls;b.textContent=text;b.type="button";b.onclick=handler;return b}
-function showWelcome(){document.getElementById("screen").innerHTML='<p class="eyebrow">Твой первый визит · 4 ситуации</p><h1 class="hero">ПЕРВЫЙ <i>ПОДХОД</i></h1><p class="lead">Короткая игра о том, как обращаться с оборудованием, поддерживать порядок в зале и где искать помощь. Не заменяет вводную тренировку с тренером.</p><div id="buttons" class="actions"></div><p class="small">Демо не связано с учётной записью DDX. Прогресс хранится только в этом браузере.</p>';
-$("buttons").append(button(state.done?"Пройти ещё раз":state.stage>0||state.step>0?"Продолжить":"Начать знакомство",()=>{if(state.done){state=initial()}event("game_started");showStage()},"btn primary"));
-if(state.stage>0||state.step>0||state.done)$("buttons").append(button("Начать заново",()=>{state=initial();event("game_restarted");showStage()},"btn ghost"));
+// Browser-only interaction prototype. Not a client of the proposed Game API.
+const STORAGE_KEY = "first-approach-interactive-v2";
+const stageOrder = ["DUMBBELLS", "BARBELL", "BENCH", "INVENTORY"];
+const station = {
+  DUMBBELLS: {
+    number: "01", name: "Гантели", headline: "Верни пары на стойку",
+    intro: "Выбери пару гантелей, затем ячейку с соответствующей маркировкой.",
+    lesson: "Гантели после подхода возвращают в предназначенные ячейки. Так проходы остаются свободными, а инвентарь доступен другим.",
+    items: [
+      { id: "PAIR_8", label: "Пара · 8 кг", target: "RACK_8" },
+      { id: "PAIR_12", label: "Пара · 12 кг", target: "RACK_12" },
+      { id: "PAIR_16", label: "Пара · 16 кг", target: "RACK_16" }
+    ],
+    targets: [
+      { id: "RACK_8", label: "Ячейка 8 кг" },
+      { id: "RACK_12", label: "Ячейка 12 кг" },
+      { id: "RACK_16", label: "Ячейка 16 кг" }
+    ]
+  },
+  BARBELL: {
+    number: "02", name: "Штанга", headline: "Собери симметрично",
+    intro: "Размести четыре виртуальных диска: по 5 и 10 кг с каждой стороны. Вес здесь — условие задачи, не рекомендация нагрузки.",
+    lesson: "Обе стороны виртуального грифа должны быть уравновешены. Крепления и реальную подготовку штанги необходимо изучать с тренером.",
+    items: [
+      { id: "DISK_5_A", label: "Диск А · 5 кг", weight: 5 },
+      { id: "DISK_5_B", label: "Диск Б · 5 кг", weight: 5 },
+      { id: "DISK_10_A", label: "Диск В · 10 кг", weight: 10 },
+      { id: "DISK_10_B", label: "Диск Г · 10 кг", weight: 10 }
+    ],
+    targets: [{ id: "LEFT", label: "Левая сторона" }, { id: "RIGHT", label: "Правая сторона" }]
+  },
+  BENCH: {
+    number: "03", name: "Скамья", headline: "Проверь перед использованием",
+    intro: "Это симуляция логических проверок. Выбирай следующий уместный шаг; не пытайся повторять её как инструкцию для незнакомой модели скамьи.",
+    lesson: "Механизмы регулировки отличаются. Не применяй силу к незнакомому фиксатору и попроси тренера показать устройство конкретной скамьи.",
+    steps: [
+      { id: "AREA_CLEAR", label: "Убедиться, что скамья свободна" },
+      { id: "UNLOADED", label: "Убедиться, что на скамье нет нагрузки" },
+      { id: "MODEL_GUIDANCE", label: "Найти инструкцию или маркировку модели" },
+      { id: "ASK_TRAINER_IF_UNSURE", label: "При неуверенности обратиться к тренеру" },
+      { id: "NO_FORCE", label: "Не применять силу к незнакомому механизму" },
+      { id: "VERIFY_LOCK", label: "До использования убедиться в фиксации и устойчивости" }
+    ],
+    displayedOrder: ["VERIFY_LOCK", "MODEL_GUIDANCE", "NO_FORCE", "AREA_CLEAR", "ASK_TRAINER_IF_UNSURE", "UNLOADED"]
+  },
+  INVENTORY: {
+    number: "04", name: "Инвентарь", headline: "Освободи тренировочную зону",
+    intro: "Выбери предмет и подходящую зону хранения. В этой модели расположение зон условное.",
+    lesson: "Возвращай принадлежности туда, где они хранятся в конкретном клубе, и не загромождай проходы.",
+    items: [
+      { id: "MAT_1", label: "Коврик 01", target: "MATS" },
+      { id: "BAND_1", label: "Резинка 01", target: "BANDS" },
+      { id: "BLOCK_1", label: "Йога-блок 01", target: "BLOCKS" },
+      { id: "ROLLER_1", label: "МФР-ролл 01", target: "ROLLERS" },
+      { id: "MAT_2", label: "Коврик 02", target: "MATS" },
+      { id: "BAND_2", label: "Резинка 02", target: "BANDS" },
+      { id: "BLOCK_2", label: "Йога-блок 02", target: "BLOCKS" },
+      { id: "ROLLER_2", label: "МФР-ролл 02", target: "ROLLERS" }
+    ],
+    targets: [
+      { id: "MATS", label: "Стойка ковриков" },
+      { id: "BANDS", label: "Зона резинок" },
+      { id: "BLOCKS", label: "Йога-блоки" },
+      { id: "ROLLERS", label: "МФР-роллы" }
+    ]
+  }
+};
+
+function initialState() {
+  return {
+    started: false, stageIndex: 0, done: false,
+    placements: { DUMBBELLS: {}, BARBELL: {}, INVENTORY: {} },
+    benchChecks: [], events: []
+  };
 }
-function showStage(){if(state.done)return showFinish();let stage=state.stage,step=state.step,t=tasks[stage][step],percent=Math.round(((tasks.slice(0,stage).reduce((n,a)=>n+a.length,0)+step)/tasks.flat().length)*100);
-$("screen").innerHTML='<div class="stagehead"><span class="eyebrow" style="margin:0">Станция '+(stage+1)+' / 4</span><span class="progress">'+percent+'% пройдено</span></div><div class="meter"><b style="width:'+percent+'%"></b></div><div class="panel"><div class="poster"><span class="number">0'+(stage+1)+'</span><div class="visual">'+["◉ ◉ ◉","▰ ━ ▰","▱","▤ ▤ ▤"][stage]+'</div><span class="tag">ПРАВИЛА ЗАЛА / '+labels[stage].toUpperCase()+'</span></div><div><p class="eyebrow">'+labels[stage]+' · Шаг '+(step+1)+' из '+tasks[stage].length+'</p><h2 class="tasktitle">'+esc(t.q)+'</h2><p class="desc">Выбери действие. Если ответ неверный, появится объяснение и можно будет попробовать ещё раз.</p><div class="choices" id="choices"></div><div id="notice" role="status"></div></div></div><div class="actions" id="bottom"></div>';
-t.a.forEach((opt,i)=>$("choices").append(button(opt,()=>choose(i),"choice")));$("bottom").append(button("На главный экран",showWelcome,"btn ghost"));
+function readState() {
+  try {
+    const value = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (!value || !value.placements || !Array.isArray(value.benchChecks)
+        || !Number.isInteger(value.stageIndex) || value.stageIndex < 0 || value.stageIndex > 4) return initialState();
+    return value;
+  } catch { return initialState(); }
 }
-function choose(i){const t=tasks[state.stage][state.step];event("game_answer",{stage:state.stage,step:state.step,correct:i===t.ok});if(i!==t.ok){$("notice").innerHTML='<div class="notice">Пока неверно. Подумай, какое действие безопаснее и не мешает другим участникам.</div>';return}
-let wasStage=state.stage;state.step++;if(state.step>=tasks[state.stage].length){state.stage++;state.step=0}if(state.stage>=tasks.length){state.done=true;event("game_completed")}else event("game_step_completed",{stage:wasStage});save();showLesson(t.note)}
-function showLesson(note){$("screen").innerHTML='<section class="fullpanel"><p class="eyebrow">Верно · правило клуба</p><h2>ТАК И НУЖНО.</h2><p>'+esc(note)+'</p><div id="lessonButtons" class="actions"></div></section>';
-$("lessonButtons").append(button(state.done?"К результату":"Продолжить",()=>state.done?showFinish():showStage(),"btn primary"))}
-function showFinish(){$("screen").innerHTML='<p class="eyebrow">Готово · 4 станции</p><h1 class="hero">ТЕПЕРЬ <i>В ЗАЛ.</i></h1><p class="lead">Ты познакомился(ась) с базовыми правилами: возвращать инвентарь, проверять фиксацию оборудования и обращаться за помощью при сомнениях.</p><div class="list"><div>01 — Возвращай гантели и другие принадлежности на место.</div><div>02 — Подготавливай оборудование с учётом безопасности.</div><div>03 — Уточняй регулировки и технику у тренера.</div><div>04 — Используй бесплатные программы знакомства с клубом.</div></div><div class="actions" id="doneButtons"></div><div class="endcard">Переход к Smart Start и ознакомительной тренировке — демонстрационный. Бронирование и проверка прав не выполняются.</div>';
-$("doneButtons").append(button("Посмотреть Smart Start",()=>showCTA("Smart Start"),"btn primary"),button("Ознакомительная тренировка",()=>showCTA("Ознакомительная тренировка")),button("Повторить игру",()=>{state=initial();event("game_restarted");showStage()},"btn ghost"))}
-function showCTA(kind){event("demo_cta_clicked",{destination:kind});$("screen").innerHTML='<section class="fullpanel"><p class="eyebrow">Демонстрация перехода</p><h2>'+esc(kind).toUpperCase()+'</h2><p>В настоящем приложении здесь откроется существующий экран DDX с условиями и доступной записью. Это учебная демонстрация: место не бронируется.</p><div class="actions" id="ctaButtons"></div></section>';$("ctaButtons").append(button("Вернуться к результату",showFinish,"btn primary"))}
-showWelcome();
+let state = readState();
+let selectedItemId = null;
+let feedback = "";
+const $ = id => document.getElementById(id);
+const escapeHtml = value => String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function logEvent(eventType, detail = {}) {
+  state.events.push({ eventType, occurredAt: new Date().toISOString(), ...detail });
+  save();
+}
+function button(label, onClick, className = "btn", disabled = false) {
+  const element = document.createElement("button");
+  element.type = "button";
+  element.className = className;
+  element.textContent = label;
+  element.disabled = disabled;
+  element.addEventListener("click", onClick);
+  return element;
+}
+function screen(html) {
+  $("screen").innerHTML = html;
+  const title = $("screen").querySelector("h1, h2");
+  if (title) { title.tabIndex = -1; title.focus({ preventScroll: true }); }
+}
+function progress(key) {
+  return key === "BENCH" ? state.benchChecks.length : Object.keys(state.placements[key] || {}).length;
+}
+function total(key) {
+  return key === "BENCH" ? station[key].steps.length : station[key].items.length;
+}
+function doneActions() {
+  return stageOrder.reduce((sum, key, i) => sum + (i < state.stageIndex ? total(key) : i === state.stageIndex ? progress(key) : 0), 0);
+}
+function start() {
+  if (state.done) state = initialState();
+  if (!state.started) {
+    state.started = true;
+    logEvent("game_session_started");
+  }
+  feedback = "";
+  selectedItemId = null;
+  renderStage();
+}
+function restart() {
+  state = initialState();
+  save();
+  start();
+}
+function renderWelcome() {
+  const action = state.done ? "Открыть результат" : state.started ? "Продолжить" : "Начать знакомство";
+  screen(`<section class="welcome">
+      <p class="eyebrow">Интерактивный онбординг / 4 станции</p>
+      <h1 class="hero">ПЕРВЫЙ <em>ПОДХОД</em></h1>
+      <p class="lead">Короткая симуляция о порядке в зале, обращении с инвентарём и ситуациях, когда лучше обратиться к тренеру.</p>
+      <p class="support">Игра не заменяет ознакомительную тренировку и не обучает работе с конкретным оборудованием.</p>
+      <div class="actions" id="welcomeActions"></div>
+      <p class="small">Неофициальный прототип. Данные сохраняются только в этом браузере. Никакие сервисы DDX не вызываются.</p>
+    </section>`);
+  $("welcomeActions").append(button(action, state.done ? renderFinish : start, "btn primary"));
+  if (state.started || state.done) $("welcomeActions").append(button("Начать заново", restart, "btn ghost"));
+}
+function renderStage() {
+  if (state.done) return renderFinish();
+  const key = stageOrder[state.stageIndex];
+  const config = station[key];
+  const grandTotal = stageOrder.reduce((sum, id) => sum + total(id), 0);
+  const pct = Math.round(doneActions() / grandTotal * 100);
+  screen(`<section class="game">
+    <div class="stage-head"><div><p class="eyebrow">Станция ${config.number} / 04 · ${escapeHtml(config.name)}</p>
+      <h1 class="station-title">${escapeHtml(config.headline)}</h1></div>
+      <span class="completion">${pct}% · ${progress(key)} из ${total(key)}</span></div>
+    <div class="meter" aria-label="Прогресс игры"><span style="width:${pct}%"></span></div>
+    <p class="instruction">${escapeHtml(config.intro)}</p>
+    <div class="activity-grid"><section class="work-area"><h2>01 / Предметы и действия</h2><div id="items" class="items"></div></section>
+      <section class="work-area targets"><h2>02 / Размещение</h2><div id="targets" class="zones"></div><div id="feedback" role="status" aria-live="polite" class="feedback">${escapeHtml(feedback)}</div></section></div>
+    <div class="bottom-actions" id="stageActions"></div>
+  </section>`);
+  if (key === "BENCH") renderBench();
+  else renderPlacements(key);
+  $("stageActions").append(button("На главный экран", renderWelcome, "btn ghost"));
+}
+function renderPlacements(key) {
+  const config = station[key];
+  const placements = state.placements[key];
+  const items = $("items");
+  const zones = $("targets");
+  config.items.forEach(item => {
+    const placed = Object.hasOwn(placements, item.id);
+    const selected = selectedItemId === item.id;
+    const choice = button(`${placed ? "✓ " : ""}${item.label}`,
+      () => { selectedItemId = item.id; feedback = ""; renderStage(); $("targets").querySelector("button:not(:disabled)")?.focus(); },
+      `object-btn${selected ? " selected" : ""}${placed ? " placed" : ""}`, placed);
+    choice.setAttribute("aria-pressed", String(selected));
+    items.append(choice);
+  });
+  if (key === "BARBELL") {
+    const totalFor = side => config.items.reduce((n, item) => n + (placements[item.id] === side ? item.weight : 0), 0);
+    const left = totalFor("LEFT"), right = totalFor("RIGHT");
+    zones.insertAdjacentHTML("beforeend", `<div class="balance" aria-live="polite"><div>Слева <strong>${left} кг</strong></div><div class="bar-symbol">━━━━</div><div>Справа <strong>${right} кг</strong></div></div>`);
+  }
+  config.targets.forEach(target => {
+    const count = Object.values(placements).filter(value => value === target.id).length;
+    const choice = button(`${target.label} · размещено: ${count}`,
+      () => placeSelected(key, target.id), "zone-btn", !selectedItemId);
+    zones.append(choice);
+  });
+}
+function placeSelected(key, targetId) {
+  const config = station[key];
+  const item = config.items.find(element => element.id === selectedItemId);
+  if (!item) return;
+  if (key === "BARBELL") {
+    const alreadySame = config.items.some(other =>
+      other.id !== item.id && other.weight === item.weight
+      && state.placements.BARBELL[other.id] === targetId);
+    if (alreadySame) {
+      feedback = "На этой стороне уже есть диск такого веса. Распредели одинаковые диски по разным сторонам.";
+      renderStage(); return;
+    }
+  } else if (item.target !== targetId) {
+    const target = config.targets.find(element => element.id === item.target);
+    feedback = `Это не подходящая зона. Для «${item.label}» найдена маркировка «${target.label}».`;
+    renderStage(); return;
+  }
+  state.placements[key][item.id] = targetId;
+  selectedItemId = null;
+  feedback = "Предмет размещён. Выбери следующий.";
+  save();
+  if (progress(key) === total(key)) return completeStage();
+  renderStage();
+  $("items").querySelector("button:not(:disabled)")?.focus();
+}
+function renderBench() {
+  const all = station.BENCH.steps;
+  const remaining = station.BENCH.displayedOrder.filter(id => !state.benchChecks.includes(id));
+  const next = all[state.benchChecks.length];
+  const items = $("items"), zones = $("targets");
+  items.insertAdjacentHTML("beforeend", `<p class="object-hint">Проверено: ${state.benchChecks.length} из 6</p>`);
+  const checked = document.createElement("ol");
+  checked.className = "checked-list";
+  state.benchChecks.forEach(id => {
+    const row = document.createElement("li");
+    row.textContent = all.find(step => step.id === id).label;
+    checked.append(row);
+  });
+  items.append(checked);
+  zones.insertAdjacentHTML("beforeend", '<p class="object-hint">Выбери следующий шаг из оставшихся.</p>');
+  remaining.forEach(id => {
+    const step = all.find(item => item.id === id);
+    zones.append(button(step.label, () => {
+      if (id !== next.id) {
+        feedback = `Следующий шаг пока не выполнен. Сначала: «${next.label}».`;
+        renderStage(); return;
+      }
+      state.benchChecks.push(id);
+      feedback = "Проверка отмечена.";
+      save();
+      if (progress("BENCH") === total("BENCH")) return completeStage();
+      renderStage();
+      $("targets").querySelector("button")?.focus();
+    }, "zone-btn"));
+  });
+}
+function completeStage() {
+  const key = stageOrder[state.stageIndex];
+  logEvent("game_stage_completed", { stage: key });
+  state.stageIndex++;
+  if (state.stageIndex === stageOrder.length) {
+    state.done = true;
+    logEvent("game_session_completed");
+  }
+  save();
+  feedback = "";
+  selectedItemId = null;
+  renderLesson(key);
+}
+function renderLesson(key) {
+  const config = station[key];
+  const last = state.done;
+  screen(`<section class="communication"><p class="eyebrow">Станция ${config.number} пройдена</p>
+      <h1>${last ? "ЧЕТЫРЕ ИЗ ЧЕТЫРЁХ." : "СТАНЦИЯ ПРОЙДЕНА."}</h1>
+      <p>${escapeHtml(config.lesson)}</p><div id="lessonActions" class="actions"></div></section>`);
+  $("lessonActions").append(button(last ? "К результату" : "Следующая станция",
+    last ? renderFinish : renderStage, "btn dark"));
+}
+function renderFinish() {
+  screen(`<section class="finish"><p class="eyebrow">Результат / 4 станции</p>
+      <h1 class="hero">МОЖНО <em>В ЗАЛ.</em></h1>
+      <p class="lead">Ты прошёл(ла) симуляцию базовых ситуаций. Это знакомство с правилами, не проверка практических навыков.</p>
+      <div class="takeaways"><div>01 · Возвращай инвентарь в предназначенные зоны.</div>
+      <div>02 · Не используй незнакомые механизмы наугад.</div>
+      <div>03 · Уточняй регулировки и технику у тренера.</div>
+      <div>04 · Smart Start и ознакомительная тренировка доступны в DDX.</div></div>
+      <div class="actions" id="resultActions"></div>
+      <p class="small">Следующие кнопки демонстрируют навигацию. Реальная запись и проверка прав не выполняются.</p></section>`);
+  $("resultActions").append(
+    button("Smart Start", () => renderCTA("Smart Start"), "btn primary"),
+    button("Ознакомительная тренировка", () => renderCTA("Ознакомительная тренировка")),
+    button("Пройти ещё раз", restart, "btn ghost")
+  );
+}
+function renderCTA(destination) {
+  logEvent("intro_cta_clicked", { destination, source: "demo_only" });
+  screen(`<section class="communication"><p class="eyebrow">Демонстрационная навигация</p>
+      <h1>${escapeHtml(destination).toUpperCase()}</h1>
+      <p>В действующем приложении здесь должен открываться существующий сценарий записи с условиями и свободными местами. Этот прототип не создаёт бронирование и не проверяет доступность занятия.</p>
+      <div id="ctaActions" class="actions"></div></section>`);
+  $("ctaActions").append(button("К результату", renderFinish, "btn dark"));
+}
+renderWelcome();
