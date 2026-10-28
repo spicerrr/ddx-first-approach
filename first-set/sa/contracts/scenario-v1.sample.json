@@ -1,0 +1,170 @@
+{
+  "scenarioId": "first-approach",
+  "version": "1.0",
+  "locale": "ru-RU",
+  "stages": [
+    {
+      "stage": "DUMBBELLS",
+      "interactionKind": "PAIR_TO_SLOT",
+      "title": "Верни пары на стойку",
+      "instruction": "Выбери пару и подписанную ячейку",
+      "items": [
+        {
+          "id": "PAIR_8",
+          "label": "Пара · 8 кг"
+        },
+        {
+          "id": "PAIR_12",
+          "label": "Пара · 12 кг"
+        },
+        {
+          "id": "PAIR_16",
+          "label": "Пара · 16 кг"
+        }
+      ],
+      "targets": [
+        {
+          "id": "RACK_8",
+          "label": "Ячейка 8 кг"
+        },
+        {
+          "id": "RACK_12",
+          "label": "Ячейка 12 кг"
+        },
+        {
+          "id": "RACK_16",
+          "label": "Ячейка 16 кг"
+        }
+      ]
+    },
+    {
+      "stage": "BARBELL",
+      "interactionKind": "DISK_TO_SIDE",
+      "title": "Собери симметрично",
+      "instruction": "По 5+10 кг с каждой стороны (учебная конфигурация)",
+      "items": [
+        {
+          "id": "DISK_5_A",
+          "label": "Диск А · 5 кг",
+          "weightKg": 5
+        },
+        {
+          "id": "DISK_5_B",
+          "label": "Диск Б · 5 кг",
+          "weightKg": 5
+        },
+        {
+          "id": "DISK_10_A",
+          "label": "Диск В · 10 кг",
+          "weightKg": 10
+        },
+        {
+          "id": "DISK_10_B",
+          "label": "Диск Г · 10 кг",
+          "weightKg": 10
+        }
+      ],
+      "targets": [
+        {
+          "id": "LEFT",
+          "label": "Левая сторона"
+        },
+        {
+          "id": "RIGHT",
+          "label": "Правая сторона"
+        }
+      ]
+    },
+    {
+      "stage": "BENCH",
+      "interactionKind": "ORDERED_CHECKS",
+      "title": "Проверь перед использованием",
+      "instruction": "Выбери логически следующий шаг проверки",
+      "items": [
+        {
+          "id": "AREA_CLEAR",
+          "label": "Убедиться, что скамья свободна"
+        },
+        {
+          "id": "UNLOADED",
+          "label": "Убедиться, что на скамье нет нагрузки"
+        },
+        {
+          "id": "MODEL_GUIDANCE",
+          "label": "Найти инструкцию или маркировку модели"
+        },
+        {
+          "id": "ASK_TRAINER_IF_UNSURE",
+          "label": "При неуверенности обратиться к тренеру"
+        },
+        {
+          "id": "NO_FORCE",
+          "label": "Не применять силу к незнакомому механизму"
+        },
+        {
+          "id": "VERIFY_LOCK",
+          "label": "До использования убедиться в фиксации и устойчивости"
+        }
+      ],
+      "targets": []
+    },
+    {
+      "stage": "INVENTORY",
+      "interactionKind": "ITEM_TO_ZONE",
+      "title": "Освободи тренировочную зону",
+      "instruction": "Помести восемь предметов в четыре условные зоны",
+      "items": [
+        {
+          "id": "MAT_1",
+          "label": "Коврик 01"
+        },
+        {
+          "id": "BAND_1",
+          "label": "Резинка 01"
+        },
+        {
+          "id": "BLOCK_1",
+          "label": "Йога-блок 01"
+        },
+        {
+          "id": "ROLLER_1",
+          "label": "МФР-ролл 01"
+        },
+        {
+          "id": "MAT_2",
+          "label": "Коврик 02"
+        },
+        {
+          "id": "BAND_2",
+          "label": "Резинка 02"
+        },
+        {
+          "id": "BLOCK_2",
+          "label": "Йога-блок 02"
+        },
+        {
+          "id": "ROLLER_2",
+          "label": "МФР-ролл 02"
+        }
+      ],
+      "targets": [
+        {
+          "id": "MATS",
+          "label": "Стойка ковриков"
+        },
+        {
+          "id": "BANDS",
+          "label": "Зона резинок"
+        },
+        {
+          "id": "BLOCKS",
+          "label": "Йога-блоки"
+        },
+        {
+          "id": "ROLLERS",
+          "label": "МФР-роллы"
+        }
+      ]
+    }
+  ]
+}
