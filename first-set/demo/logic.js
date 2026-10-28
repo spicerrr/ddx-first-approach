@@ -140,6 +140,7 @@ function renderWelcome() {
       <p class="small">Неофициальный прототип. Данные сохраняются только в этом браузере. Никакие сервисы DDX не вызываются.</p>
     </section>`);
   $("welcomeActions").append(button(action, state.done ? renderFinish : start, "btn primary"));
+  $("welcomeActions").append(button("Узнать о Smart Start", () => renderCTA("Smart Start"), "btn ghost"));
   if (state.started || state.done) $("welcomeActions").append(button("Начать заново", restart, "btn ghost"));
 }
 function renderStage() {
@@ -161,6 +162,7 @@ function renderStage() {
   if (key === "BENCH") renderBench();
   else renderPlacements(key);
   $("stageActions").append(button("На главный экран", renderWelcome, "btn ghost"));
+  $("stageActions").append(button("Перейти к Smart Start", () => renderCTA("Smart Start"), "btn ghost"));
 }
 function renderPlacements(key) {
   const config = station[key];
@@ -288,6 +290,6 @@ function renderCTA(destination) {
       <h1>${escapeHtml(destination).toUpperCase()}</h1>
       <p>В действующем приложении здесь должен открываться существующий сценарий записи с условиями и свободными местами. Этот прототип не создаёт бронирование и не проверяет доступность занятия.</p>
       <div id="ctaActions" class="actions"></div></section>`);
-  $("ctaActions").append(button("К результату", renderFinish, "btn dark"));
+  $("ctaActions").append(button("Назад", state.done ? renderFinish : state.started ? renderStage : renderWelcome, "btn dark"));
 }
 renderWelcome();
