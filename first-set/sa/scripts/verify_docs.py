@@ -1,4 +1,4 @@
-"""Validate the compact First Approach repository: contracts, content and links."""
+"""Проверка контрактов и целостности аналитических документов проекта."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -45,7 +45,7 @@ assert not list(validator.iter_errors(sample))
 assert list(validator.iter_errors({k: v for k, v in sample.items() if k != "stage"}))
 assert list(validator.iter_errors({**sample, "memberName": "DO NOT PUBLISH"}))
 
-# Four Markdown entrypoints; implementation details live in code/contracts.
+# Четыре основных документа; подробности реализации остаются в коде и контрактах.
 markdown_files = sorted(p.relative_to(repo).as_posix() for p in repo.rglob("*.md") if ".git" not in p.parts)
 expected = sorted(["README.md", "first-set/ba/README.md", "first-set/sa/README.md", "first-set/demo/README.md"])
 assert markdown_files == expected, f"unexpected Markdown document tree: {markdown_files}"
@@ -59,13 +59,45 @@ for path in [repo / p for p in expected]:
         if dest_path and not (path.parent / dest_path).exists():
             raise AssertionError(f"Broken link: {path.relative_to(repo)} → {dest}")
 
-# Editorial structure and formal analytical integrity are separate contracts:
-# the repo remains four readable Markdown pages, while the BA/SA registries retain their IDs.
+# Проверяем структуру аналитических документов и полноту формальных реестров.
 ba_text = (repo / "first-set/ba/README.md").read_text(encoding="utf-8")
 sa_text = (repo / "first-set/sa/README.md").read_text(encoding="utf-8")
-for name, body in [("BA", ba_text), ("SA", sa_text)]:
-    assert body.count("<details>") == body.count("</details>"), f"{name}: broken collapsed section"
-    assert body.count("<details>") >= (4 if name == "BA" else 5)
+# Требования располагаются в самостоятельных разделах, а не в общей сводной таблице.
+ba_sections = [
+    "## 3. Заинтересованные стороны и потребности",
+    "## 4. Цели и показатели результата",
+    "## 5. Функциональные требования",
+    "## 6. Бизнес-правила",
+    "## 7. Нефункциональные требования",
+    "## 8. Ограничения и интеграционные зависимости",
+    "## 9. Зафиксированные продуктовые решения",
+    "## 11. Реестр фактов и гипотез",
+    "## 12. Прослеживаемость требований",
+]
+sa_sections = [
+    "## 3. Системные требования и их прослеживаемость",
+    "## 4. Жизненный цикл сессии",
+    "## 5. Логическая модель данных",
+    "## 7. События и их источники",
+    "## 8. Критерии приёмки",
+    "## 9. Открытые вопросы",
+]
+for section in ba_sections:
+    assert section in ba_text, f"BA: missing section {section}"
+for section in sa_sections:
+    assert section in sa_text, f"SA: missing section {section}"
+
+# Структура ключевых таблиц и идентификаторов проверяется независимо от языка полей API.
+for title in ["| ID | Заинтересованная сторона | Потребность |",
+              "| ID | Цель | Критерий оценки | Статус |",
+              "| ID | Требование | Основание |",
+              "| ID | Правило | Следствие для функции |",
+              "| ID | Ограничение | Следствие |"]:
+    assert title in ba_text, f"BA: missing table {title}"
+for title in ["| ID | Основание (BA) | Системное требование | Критерии приёмки |",
+              "| Действие | Предусловие | Результат |",
+              "| ID | Условие / действие | Ожидаемый результат |"]:
+    assert title in sa_text, f"SA: missing table {title}"
 
 def check_ids(body: str, prefix: str, count: int) -> None:
     expected = {f"{prefix}-{number:02d}" for number in range(1, count + 1)}
@@ -83,4 +115,4 @@ for id in (f"SA-{i:02d}" for i in range(1, 9)):
 
 assert "Smart Start" in (repo / "README.md").read_text(encoding="utf-8")
 assert "accepted" in (sa / "README.md").read_text(encoding="utf-8")
-print("OK: contracts, four Markdown entrypoints, full BA registries and SA traceability / 26 AC")
+print("OK: контракты, ссылки, разделы BA/SA, все требования и 26 критериев приёмки")
