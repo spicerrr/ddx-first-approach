@@ -11,10 +11,17 @@ export type Station = {
   targets: readonly Destination[];
 };
 
+export const benchParts = ["backrest", "seat"] as const;
+export type BenchPart = typeof benchParts[number];
+export const benchFinalCheck = "VERIFY_LOCK";
+
 export const scenarioVersion = scenario.version;
-export const stations = scenario.stages as readonly Station[];
+export const stations: readonly Station[] = (scenario.stages as readonly Station[]).map((station) =>
+  station.stage === "BENCH" ? { ...station, title: "Настрой скамью" } : station,
+);
 export const lastStation = stations.length - 1;
-export const totalActions = stations.reduce((sum, station) => sum + station.items.length, 0);
+export const stationTotal = (station: Station) => station.items.length + (station.stage === "BENCH" ? benchParts.length : 0);
+export const totalActions = stations.reduce((sum, station) => sum + stationTotal(station), 0);
 
 export const stationDetails = {
   DUMBBELLS: {
@@ -33,10 +40,10 @@ export const stationDetails = {
   },
   BENCH: {
     name: "Скамья",
-    instruction: "Выполни шесть проверок по порядку.",
-    lessonTitle: "Сначала проверь",
+    instruction: "Проверь скамью, настрой спинку и сиденье, затем проверь фиксацию.",
+    lessonTitle: "Скамья готова",
     lesson: "Устройство скамей различается. Найди инструкцию к своей модели, а если сомневаешься, попроси тренера показать её в зале.",
-    takeaway: "Уточни, как пользоваться скамьёй, и проверь, что она устойчива.",
+    takeaway: "После регулировки проверь фиксацию спинки, сиденья и устойчивость скамьи.",
   },
   INVENTORY: {
     name: "Инвентарь",

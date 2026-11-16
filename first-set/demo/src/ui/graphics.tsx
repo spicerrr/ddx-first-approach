@@ -18,6 +18,7 @@ const iconPaths = {
   storage: <><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/></>,
   book: <><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6m-6 4h6"/></>,
   person: <><circle cx="12" cy="8" r="3"/><path d="M6 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></>,
+  rotate: <><path d="M4 11a8 8 0 1 1 2 6M4 5v6h6"/></>,
   level: <><path d="M4 17h16M7 13V7m5 6V5m5 8V9"/><path d="M4 20h16"/></>,
 } as const;
 

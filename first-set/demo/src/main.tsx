@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { newProgress, nextStation, start, stationProgress, submit, type Action } from "./engine/game";
-import { stationDetails, stations, type PlacementStation, type Station } from "./engine/scenario";
+import { stationDetails, stations, stationTotal, type PlacementStation, type Station } from "./engine/scenario";
 import { readData, saveData, withUiEvent, type LocalData, type Training } from "./engine/store";
 import { BenchChecks } from "./ui/bench";
 import { Icon } from "./ui/graphics";
@@ -117,13 +117,13 @@ function App() {
                 <p className="accent-label">Станция {session.stageIndex + 1} из {stations.length}</p>
                 <h1 ref={heading} tabIndex={-1}>{station.title}</h1>
               </div>
-              <p className="stage-score" aria-label={`Выполнено ${stationProgress(session, station)} из ${station.items.length}`}>
-                <strong>{stationProgress(session, station)}</strong><span> / {station.items.length}</span>
+              <p className="stage-score" aria-label={`Выполнено ${stationProgress(session, station)} из ${stationTotal(station)}`}>
+                <strong>{stationProgress(session, station)}</strong><span> / {stationTotal(station)}</span>
               </p>
             </div>
             <p className="game-instruction">{stationDetails[station.stage].instruction}</p>
             {station.stage === "BENCH"
-              ? <BenchChecks station={station} done={session.benchChecks.length} check={(check) => action({ kind: "bench", check })} />
+              ? <BenchChecks station={station} progress={session} submit={action} />
               : <Placements station={station as Station & { stage: PlacementStation }} progress={session} place={(item, destination) => action({ kind: "place", stage: station.stage as PlacementStation, item, destination })} />}
             <div className="stage-footer">
               <button type="button" className="button quiet training-link" onClick={() => openTraining("smart-start")}>Smart Start <Icon name="external" size={17} /></button>

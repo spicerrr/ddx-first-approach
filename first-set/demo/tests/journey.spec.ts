@@ -1,5 +1,5 @@
 import { test, expect, type Page, type TestInfo } from "@playwright/test";
-import { activate, button, noOverflow, placements, put } from "./controls";
+import { activate, benchControls, button, moveBenchPart, noOverflow, placements, put } from "./controls";
 
 const key = "first-approach-interactive-v3";
 const saved = (page: Page) => page.evaluate((storageKey) => JSON.parse(localStorage.getItem(storageKey)!), key);
@@ -9,7 +9,7 @@ async function capture(page: Page, info: TestInfo, name: string) {
   await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true, animations: "disabled" });
 }
 
-test("21 действие, четыре пояснения, ошибки и восстановление", async ({ page, isMobile }, info) => {
+test("23 действия, регулировка скамьи, ошибки и восстановление", async ({ page, isMobile }, info) => {
   const problems: string[] = [];
   page.on("pageerror", (error) => problems.push(error.message));
   page.on("console", (entry) => { if (entry.type() === "error") problems.push(entry.text()); });
@@ -63,15 +63,28 @@ test("21 действие, четыре пояснения, ошибки и во
 
   await expect(page.getByRole("heading", { name: "Диски по обе стороны" })).toBeVisible();
   await press("Следующая станция");
+  await expect(page.locator(".bench-view")).toHaveAttribute("data-model", "ready");
   await capture(page, info, "06-bench");
   await press("Шаг 6: Фиксация и устойчивость");
-  await expect(status).toContainText("Сначала");
-  await expect(score(page, 0, 6)).toBeVisible();
+  await expect(page.locator(".bench-feedback")).toContainText("Сначала");
+  await expect(score(page, 0, 8)).toBeVisible();
   await press("Отметить проверку");
   await expect(button(page, "Шаг 1: Свободная скамья (выполнен)")).toBeDisabled();
-  for (let i = 1; i < 6; i += 1) await press("Отметить проверку");
+  for (let i = 1; i < 5; i += 1) await press("Отметить проверку");
+  await moveBenchPart(page, benchControls[0], isMobile, -18);
+  await expect(button(page, benchControls[0])).toBeVisible();
+  for (const control of benchControls.slice(0, 3)) await moveBenchPart(page, control, isMobile);
+  await expect(score(page, 6, 8)).toBeVisible();
+  await page.reload();
+  await press("Продолжить");
+  await expect(score(page, 6, 8)).toBeVisible();
+  for (const control of benchControls.slice(3)) await moveBenchPart(page, control, isMobile);
+  await expect(score(page, 7, 8)).toBeVisible();
+  await expect(page.locator(".bench-feedback")).toHaveText("Фиксация сиденья проверена.");
+  await button(page, "Отметить проверку").scrollIntoViewIfNeeded();
+  await press("Отметить проверку");
 
-  await expect(page.getByRole("heading", { name: "Сначала проверь" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Скамья готова" })).toBeVisible();
   await press("Следующая станция");
   await capture(page, info, "07-inventory");
   await move(["Коврик 01", "Зона резинок"]);

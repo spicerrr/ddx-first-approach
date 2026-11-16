@@ -1,5 +1,6 @@
 import { newProgress, stationProgress, type GameEvent, type Phase, type Progress } from "./game";
-import { lastStation, placementDestination, scenarioVersion, stations, type PlacementStation, type StationId } from "./scenario";
+import { benchFinalCheck, benchParts, lastStation, placementDestination, scenarioVersion, stations, stationTotal,
+  type PlacementStation, type StationId } from "./scenario";
 
 export const storageKey = "first-approach-interactive-v3";
 const legacyKey = "first-approach-interactive-v2";
@@ -70,6 +71,16 @@ function validateProgress(value: unknown): Progress | null {
     if (station.stage === "BENCH") {
       if (benchChecks.length > station.items.length || benchChecks.some((id, i) => id !== station.items[i].id)) return null;
       validated.benchChecks = benchChecks;
+      const verifyIndex = station.items.findIndex(({ id }) => id === benchFinalCheck);
+      // Older saves had only the checklist. Keep previously completed stations complete.
+      const adjustments = value.benchAdjustments === undefined
+        ? benchChecks.length > verifyIndex ? [...benchParts] : []
+        : value.benchAdjustments;
+      if (!Array.isArray(adjustments) || adjustments.length > benchParts.length
+        || adjustments.some((part, i) => part !== benchParts[i])
+        || (benchChecks.length < verifyIndex && adjustments.length > 0)
+        || (benchChecks.length > verifyIndex && adjustments.length < benchParts.length)) return null;
+      validated.benchAdjustments = adjustments;
     } else {
       const values = placements[station.stage];
       if (!record(values)) return null;
@@ -93,13 +104,13 @@ function validateProgress(value: unknown): Progress | null {
     const completed = index < stageIndex || index === stageIndex && (phase === "lesson" || phase === "complete");
     const inPlay = phase === "playing" && index === stageIndex;
     const count = stationProgress(validated, station);
-    if (completed ? count !== station.items.length : inPlay ? count >= station.items.length : count !== 0) return null;
+    if (completed ? count !== stationTotal(station) : inPlay ? count >= stationTotal(station) : count !== 0) return null;
   }
 
   if (!events.every(isGameEvent)) return null;
   const keys = events.map(eventKey);
   if (new Set(keys).size !== keys.length) return null;
-  const completedStations = stations.filter((station) => stationProgress(validated, station) === station.items.length);
+  const completedStations = stations.filter((station) => stationProgress(validated, station) === stationTotal(station));
   const expected = phase === "ready" ? [] : [
     "game_session_started",
     ...completedStations.map(({ stage }) => stage),

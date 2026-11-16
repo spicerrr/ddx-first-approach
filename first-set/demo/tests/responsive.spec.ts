@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { button, noOverflow, placements, put } from "./controls";
+import { benchControls, button, noOverflow, placements, put } from "./controls";
 
 for (const width of [320, 375, 390, 430, 768, 1440]) {
   test(`экраны и доступность кнопок при ширине ${width} px`, async ({ page }) => {
@@ -15,7 +15,9 @@ for (const width of [320, 375, 390, 430, 768, 1440]) {
       );
       expect(controls).toBe(true);
       if (name === "bench") {
-        for (let step = 0; step < 6; step += 1) await button(page, "Отметить проверку").click();
+        for (let step = 0; step < 5; step += 1) await button(page, "Отметить проверку").click();
+        for (const control of benchControls) await button(page, control).click();
+        await button(page, "Отметить проверку").click();
       } else {
         for (const pair of placements[name as keyof typeof placements]) await put(page, pair);
       }

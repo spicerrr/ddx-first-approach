@@ -1,4 +1,5 @@
-import { lastStation, placementDestination, stations, type PlacementStation, type Station, type StationId } from "./scenario";
+import { benchFinalCheck, benchParts, lastStation, placementDestination, stations, stationTotal,
+  type BenchPart, type PlacementStation, type Station, type StationId } from "./scenario";
 
 export type Phase = "ready" | "playing" | "lesson" | "complete";
 export type GameEvent =
@@ -10,12 +11,14 @@ export type Progress = {
   stageIndex: number;
   placements: Record<PlacementStation, Record<string, string>>;
   benchChecks: string[];
+  benchAdjustments: BenchPart[];
   events: GameEvent[];
 };
 
 export type Action =
   | { kind: "place"; stage: PlacementStation; item: string; destination: string }
-  | { kind: "bench"; check: string };
+  | { kind: "bench"; check: string }
+  | { kind: "bench-adjustment"; part: BenchPart };
 
 export type Result = {
   progress: Progress;
@@ -29,6 +32,7 @@ export function newProgress(): Progress {
     stageIndex: 0,
     placements: { DUMBBELLS: {}, BARBELL: {}, INVENTORY: {} },
     benchChecks: [],
+    benchAdjustments: [],
     events: [],
   };
 }
@@ -41,8 +45,17 @@ export function start(progress: Progress, at = new Date().toISOString()): Progre
 
 export function stationProgress(progress: Progress, station: Station) {
   return station.stage === "BENCH"
-    ? progress.benchChecks.length
+    ? progress.benchChecks.length + progress.benchAdjustments.length
     : Object.keys(progress.placements[station.stage]).length;
+}
+
+export function benchTask(progress: Progress, station: Station) {
+  const check = station.items[progress.benchChecks.length];
+  if (!check) return null;
+  const part = benchParts[progress.benchAdjustments.length];
+  return check.id === benchFinalCheck && part
+    ? { kind: "adjust" as const, part }
+    : { kind: "check" as const, check };
 }
 
 export function nextStation(progress: Progress): Progress {
@@ -61,15 +74,23 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
   let updated: Progress;
   let message: string;
 
-  if (action.kind === "bench") {
+  if (action.kind === "bench" || action.kind === "bench-adjustment") {
     if (station.stage !== "BENCH") return reject("Выбери действие текущей станции.");
-    const next = station.items[progress.benchChecks.length];
-    if (next?.id !== action.check) {
-      return reject(`Сначала нужно ${next.label.toLocaleLowerCase("ru-RU")}.`);
+    const task = benchTask(progress, station);
+    if (!task) return reject("Скамья уже проверена.");
+    if (task.kind === "adjust") {
+      if (action.kind !== "bench-adjustment" || action.part !== task.part) {
+        return reject(task.part === "backrest" ? "Сначала настрой спинку." : "Сначала настрой сиденье.");
+      }
+      updated = { ...progress, benchAdjustments: [...progress.benchAdjustments, action.part] };
+      message = "Фиксация проверена.";
+    } else {
+      if (action.kind !== "bench" || task.check.id !== action.check) {
+        return reject(`Сначала нужно ${task.check.label.toLocaleLowerCase("ru-RU")}.`);
+      }
+      updated = { ...progress, benchChecks: [...progress.benchChecks, action.check] };
+      message = "Проверка отмечена.";
     }
-
-    updated = { ...progress, benchChecks: [...progress.benchChecks, action.check] };
-    message = "Проверка отмечена.";
   } else {
     if (station.stage !== action.stage) return reject("Выбери предмет текущей станции.");
 
@@ -102,7 +123,7 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
     message = "На месте.";
   }
 
-  if (stationProgress(updated, station) === station.items.length) {
+  if (stationProgress(updated, station) === stationTotal(station)) {
     const events: GameEvent[] = [
       ...updated.events,
       { type: "game_stage_completed", at, stage: station.stage },

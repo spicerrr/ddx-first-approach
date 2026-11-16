@@ -6,6 +6,7 @@ import { decode, freshData, migrate, readData, saveData, storageKey, withUiEvent
 const at = "2026-11-16T09:00:00.000Z";
 const place = (stage, item, destination) => ({ kind: "place", stage, item, destination });
 const bench = (check) => ({ kind: "bench", check });
+const adjust = (part) => ({ kind: "bench-adjustment", part });
 
 const actions = [
   [
@@ -19,7 +20,10 @@ const actions = [
     place("BARBELL", "DISK_10_A", "RIGHT"),
     place("BARBELL", "DISK_10_B", "LEFT"),
   ],
-  ["AREA_CLEAR", "UNLOADED", "MODEL_GUIDANCE", "ASK_TRAINER_IF_UNSURE", "NO_FORCE", "VERIFY_LOCK"].map(bench),
+  [
+    ...["AREA_CLEAR", "UNLOADED", "MODEL_GUIDANCE", "ASK_TRAINER_IF_UNSURE", "NO_FORCE"].map(bench),
+    adjust("backrest"), adjust("seat"), bench("VERIFY_LOCK"),
+  ],
   [
     place("INVENTORY", "MAT_1", "MATS"), place("INVENTORY", "MAT_2", "MATS"),
     place("INVENTORY", "BAND_1", "BANDS"), place("INVENTORY", "BAND_2", "BANDS"),
@@ -45,9 +49,9 @@ function envelope(progress) {
 }
 
 describe("Правила и переходы", () => {
-  it("проводит через 21 действие, четыре пояснения и единственное завершение", () => {
-    expect(totalActions).toBe(21);
-    expect(actions.map((group) => group.length)).toEqual([3, 4, 6, 8]);
+  it("проводит через 23 действия, четыре пояснения и единственное завершение", () => {
+    expect(totalActions).toBe(23);
+    expect(actions.map((group) => group.length)).toEqual([3, 4, 8, 8]);
     let progress = atStation(0);
     for (const [index, group] of actions.entries()) {
       for (const [step, action] of group.entries()) {
@@ -102,6 +106,18 @@ describe("Правила и переходы", () => {
     expect(submit(accepted, bench("AREA_CLEAR")).accepted).toBe(false);
   });
 
+  it("требует настройку обеих подушек перед финальной проверкой", () => {
+    const state = actions[2].slice(0, 5).reduce(accept, atStation(2));
+    expect(submit(state, bench("VERIFY_LOCK")).progress).toBe(state);
+    expect(submit(state, adjust("seat")).progress).toBe(state);
+    const backrestDone = accept(state, adjust("backrest"));
+    expect(decode(envelope(backrestDone))?.progress.benchAdjustments).toEqual(["backrest"]);
+    expect(submit(backrestDone, adjust("backrest")).progress).toBe(backrestDone);
+    const seatDone = accept(backrestDone, adjust("seat"));
+    expect(seatDone.phase).toBe("playing");
+    expect(accept(seatDone, bench("VERIFY_LOCK")).phase).toBe("lesson");
+  });
+
   it("чужая зона на складе, неизвестный предмет и другая станция не принимаются", () => {
     const state = accept(atStation(3), actions[3][0]);
     expect(submit(state, place("INVENTORY", "MAT_2", "BANDS")).progress).toBe(state);
@@ -141,6 +157,17 @@ describe("Локальное состояние", () => {
       ],
     };
     expect(migrate(v2)).toEqual(envelope(accept(atStation(0), actions[0][0])));
+  });
+
+  it("сохраняет пройденную станцию из старого v3 и даёт пройти практику при незавершённой станции", () => {
+    const partial = actions[2].slice(0, 5).reduce(accept, atStation(2));
+    const complete = actions[2].reduce(accept, atStation(2));
+    for (const progress of [partial, complete, atStation(3)]) {
+      const { benchAdjustments: _removed, ...oldProgress } = progress;
+      expect(decode(envelope(oldProgress))?.progress).toEqual(progress);
+    }
+    expect(decode(envelope({ ...partial, benchAdjustments: ["seat"] }))).toBeNull();
+    expect(decode(envelope({ ...complete, benchAdjustments: ["backrest"] }))).toBeNull();
   });
 
   it.each([null, 1, [], {}, { ...freshData(), format: 2 }, { ...freshData(), scenarioVersion: "0.1" }])(
