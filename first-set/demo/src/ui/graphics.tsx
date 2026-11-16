@@ -37,5 +37,8 @@ export function Equipment({ name, className = "", alt = "" }: { name: ArtName; c
 export function ItemArt({ station, item }: { station: PlacementStation; item: Item }) {
   const name = station === "DUMBBELLS" ? "dumbbells" : station === "BARBELL" ? "plate" : inventoryArt[item.id.split("_")[0]];
   const weight = item.weightKg ?? item.id.split("_")[1];
+  if (station === "DUMBBELLS") {
+    return <span className="single-dumbbell"><Equipment name="dumbbells" className={`mass-${weight}`} /></span>;
+  }
   return <Equipment name={name} className={station === "INVENTORY" ? "" : `mass-${weight}`} />;
 }

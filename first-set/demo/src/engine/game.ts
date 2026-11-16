@@ -1,3 +1,4 @@
+import { checkBarbell } from "./barbell";
 import { benchFinalCheck, benchParts, lastStation, placementDestination, stations, stationTotal,
   type BenchPart, type PlacementStation, type Station, type StationId } from "./scenario";
 
@@ -17,6 +18,8 @@ export type Progress = {
 
 export type Action =
   | { kind: "place"; stage: PlacementStation; item: string; destination: string }
+  | { kind: "remove-disk"; item: string }
+  | { kind: "check-barbell" }
   | { kind: "bench"; check: string }
   | { kind: "bench-adjustment"; part: BenchPart };
 
@@ -39,14 +42,15 @@ export function newProgress(): Progress {
 
 export function start(progress: Progress, at = new Date().toISOString()): Progress {
   if (progress.phase !== "ready") return progress;
-
   return { ...progress, phase: "playing", events: [{ type: "game_session_started", at }] };
 }
 
 export function stationProgress(progress: Progress, station: Station) {
-  return station.stage === "BENCH"
-    ? progress.benchChecks.length + progress.benchAdjustments.length
-    : Object.keys(progress.placements[station.stage]).length;
+  if (station.stage === "BENCH") return progress.benchChecks.length + progress.benchAdjustments.length;
+  if (station.stage === "BARBELL") {
+    return Number(progress.events.some((event) => event.type === "game_stage_completed" && event.stage === "BARBELL"));
+  }
+  return Object.keys(progress.placements[station.stage]).length;
 }
 
 export function benchTask(progress: Progress, station: Station) {
@@ -60,20 +64,39 @@ export function benchTask(progress: Progress, station: Station) {
 
 export function nextStation(progress: Progress): Progress {
   if (progress.phase !== "lesson") return progress;
-
   return progress.stageIndex === lastStation
     ? { ...progress, phase: "complete" }
     : { ...progress, phase: "playing", stageIndex: progress.stageIndex + 1 };
 }
 
+function finishStation(progress: Progress, stage: StationId, at: string): Progress {
+  const events: GameEvent[] = [...progress.events, { type: "game_stage_completed", at, stage }];
+  if (progress.stageIndex === lastStation) events.push({ type: "game_session_completed", at });
+  return { ...progress, phase: "lesson", events };
+}
+
 export function submit(progress: Progress, action: Action, at = new Date().toISOString()): Result {
   const reject = (message: string): Result => ({ progress, accepted: false, message });
+  const accept = (next: Progress, message: string): Result => ({ progress: next, accepted: true, message });
   if (progress.phase !== "playing") return reject("Продолжи прохождение со своего экрана.");
 
   const station = stations[progress.stageIndex];
+  if (action.kind === "check-barbell") {
+    if (station.stage !== "BARBELL") return reject("Выбери действие текущей станции.");
+    const result = checkBarbell(progress.placements.BARBELL);
+    return result.accepted ? accept(finishStation(progress, "BARBELL", at), result.message) : reject(result.message);
+  }
+
+  if (action.kind === "remove-disk") {
+    if (station.stage !== "BARBELL") return reject("Выбери действие текущей станции.");
+    const disks = { ...progress.placements.BARBELL };
+    if (!Object.hasOwn(disks, action.item)) return reject("Выбери установленный диск.");
+    delete disks[action.item];
+    return accept({ ...progress, placements: { ...progress.placements, BARBELL: disks } }, "Диск возвращён в лоток.");
+  }
+
   let updated: Progress;
   let message: string;
-
   if (action.kind === "bench" || action.kind === "bench-adjustment") {
     if (station.stage !== "BENCH") return reject("Выбери действие текущей станции.");
     const task = benchTask(progress, station);
@@ -86,51 +109,38 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
       message = "Фиксация проверена.";
     } else {
       if (action.kind !== "bench" || task.check.id !== action.check) {
-        return reject(`Сначала нужно ${task.check.label.toLocaleLowerCase("ru-RU")}.`);
+        return reject(task.check.id === benchFinalCheck
+          ? "Перед подходом проверь, что скамья стоит устойчиво."
+          : "Сначала освободи скамью от инвентаря.");
       }
       updated = { ...progress, benchChecks: [...progress.benchChecks, action.check] };
-      message = "Проверка отмечена.";
+      message = "Проверка пройдена.";
     }
   } else {
     if (station.stage !== action.stage) return reject("Выбери предмет текущей станции.");
 
     const item = station.items.find(({ id }) => id === action.item);
     const target = station.targets.find(({ id }) => id === action.destination);
-    if (!item || !target) return reject("Выбери предмет и подписанное место для него.");
+    if (!item || !target) return reject("Выбери предмет и место для него.");
 
     const placements = progress.placements[action.stage];
-    if (Object.hasOwn(placements, item.id)) return reject("Этот предмет уже на месте.");
-
     if (action.stage === "BARBELL") {
-      const duplicate = station.items.some((candidate) =>
-        candidate.weightKg === item.weightKg && placements[candidate.id] === target.id,
-      );
-      if (duplicate) {
-        return reject(`Здесь уже есть диск ${item.weightKg} кг. Поставь второй диск такого веса с другой стороны.`);
-      }
+      if (placements[item.id] === target.id) return reject("Диск уже на этой стороне.");
     } else {
-      const expected = placementDestination(action.stage, item.id);
+      if (Object.hasOwn(placements, item.id)) return reject("Этот предмет уже на месте.");
+      const expected = placementDestination(action.stage, item);
       if (expected !== target.id) {
         const label = station.targets.find(({ id }) => id === expected)?.label;
-        return reject(label ? `Для этого предмета нужно другое место: «${label}».` : "Зона для этого предмета недоступна.");
+        return reject(label ? `Для этого предмета подходит «${label}».` : "Зона для этого предмета недоступна.");
       }
     }
 
-    updated = {
-      ...progress,
-      placements: { ...progress.placements, [action.stage]: { ...placements, [item.id]: target.id } },
-    };
-    message = "На месте.";
+    updated = { ...progress, placements: { ...progress.placements, [action.stage]: { ...placements, [item.id]: target.id } } };
+    message = action.stage === "BARBELL" ? "Штанга обновлена." : "На месте.";
   }
 
-  if (stationProgress(updated, station) === stationTotal(station)) {
-    const events: GameEvent[] = [
-      ...updated.events,
-      { type: "game_stage_completed", at, stage: station.stage },
-    ];
-    if (updated.stageIndex === lastStation) events.push({ type: "game_session_completed", at });
-    updated = { ...updated, phase: "lesson", events };
+  if (station.stage !== "BARBELL" && stationProgress(updated, station) === stationTotal(station)) {
+    updated = finishStation(updated, station.stage, at);
   }
-
-  return { progress: updated, accepted: true, message };
+  return accept(updated, message);
 }

@@ -1,14 +1,15 @@
 import { useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import type { Progress, Result } from "../engine/game";
-import type { Destination, Item, PlacementStation, Station } from "../engine/scenario";
+import { barbellLayout } from "../engine/barbell";
+import type { Action, Progress, Result } from "../engine/game";
+import { barbell, initialDumbbell, type Destination, type Item, type PlacementStation, type Station } from "../engine/scenario";
 import { Equipment, Icon, ItemArt, type ArtName } from "./graphics";
 
 type PlacementConfig = Station & { stage: PlacementStation };
 type PlacementProps = {
   station: PlacementConfig;
   progress: Progress;
-  place: (item: string, destination: string) => Result;
+  submit: (action: Action) => Result;
 };
 type PointerStart = { pointerId: number; item: Item; x: number; y: number; moved: boolean };
 type Drag = { item: Item; x: number; y: number; over?: string };
@@ -25,21 +26,23 @@ function hitTarget(event: PointerEvent) {
 }
 
 function shortLabel(station: PlacementStation, item: Item) {
-  if (station === "DUMBBELLS") return item.label.replace("Пара · ", "");
+  if (station === "DUMBBELLS") return `${item.weightKg} кг`;
   if (station === "BARBELL") return item.label.replace("Диск ", "");
   return item.label.replace(/ 0([12])$/, " $1");
 }
 
-export function Placements({ station, progress, place }: PlacementProps) {
+export function Placements({ station, progress, submit }: PlacementProps) {
   const [selected, setSelected] = useState<Item | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
-  const [feedback, setFeedback] = useState<{ text: string; invalid?: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ text: string; error?: boolean; invalid?: string } | null>(null);
   const start = useRef<PointerStart | null>(null);
   const ignoreClick = useRef<string | null>(null);
   const scene = useRef<HTMLDivElement>(null);
   const tray = useRef<HTMLDivElement>(null);
   const assigned = progress.placements[station.stage];
   const itemsIn = (target: string) => station.items.filter((item) => assigned[item.id] === target);
+  const assembly = station.stage === "BARBELL" ? barbellLayout(assigned) : null;
+  const remaining = station.items.length - Object.keys(assigned).length;
 
   function select(item: Item) {
     setSelected(item);
@@ -56,17 +59,29 @@ export function Placements({ station, progress, place }: PlacementProps) {
   }
 
   function drop(item: Item, target: string, keyboard = false) {
-    const result = place(item.id, target);
+    const result = submit({ kind: "place", stage: station.stage, item: item.id, destination: target });
     if (result.accepted) {
       setSelected(null);
-      setFeedback({ text: "На месте. Выбери следующий предмет." });
+      setFeedback({ text: result.message });
       if (keyboard) {
         requestAnimationFrame(() => tray.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true }));
       }
     } else {
       setSelected(item);
-      setFeedback({ text: result.message, invalid: target });
+      setFeedback({ text: result.message, error: true, invalid: target });
     }
+  }
+
+  function removeSelected() {
+    if (!selected) return;
+    const result = submit({ kind: "remove-disk", item: selected.id });
+    if (result.accepted) setSelected(null);
+    setFeedback({ text: result.message, error: !result.accepted });
+  }
+
+  function verifyAssembly() {
+    const result = submit({ kind: "check-barbell" });
+    setFeedback({ text: result.message, error: !result.accepted });
   }
 
   function pointerDown(event: PointerEvent<HTMLButtonElement>, item: Item) {
@@ -137,47 +152,56 @@ export function Placements({ station, progress, place }: PlacementProps) {
             <div className="rack-leg rack-leg-right" aria-hidden="true" />
             <div className="rack-slots">
               {station.targets.map((target) => {
-                const [item] = itemsIn(target.id);
+                const placed = itemsIn(target.id);
+                const pair = target.id === "RACK_8" ? [initialDumbbell, ...placed] : placed;
                 return destination(target, <>
                   <span className="rack-pocket">
-                    {item ? <span className="placed-art"><ItemArt item={item} station={station.stage} /></span>
+                    {pair.length === 2 ? <span className="placed-art"><Equipment name="dumbbells" /></span>
+                      : pair.length === 1 ? <span className="placed-art"><ItemArt item={pair[0]} station="DUMBBELLS" /></span>
                       : <span className="rack-outline" aria-hidden="true"><Equipment name="dumbbells" /><Icon name="plus" size={18} /></span>}
                   </span>
                   <span className="rack-weight">
                     {target.label.replace("Ячейка ", "")}
-                    {item && <Icon name="check" size={15} />}
+                    {pair.length === 2 ? <Icon name="check" size={15} /> : <small>{pair.length}/2</small>}
                   </span>
-                </>, item ? "filled rack-slot" : "rack-slot");
+                </>, pair.length === 2 ? "filled rack-slot" : "rack-slot");
               })}
             </div>
           </div>
         )}
 
-        {station.stage === "BARBELL" && (
+        {assembly && (
           <>
+            <div className="assembly-mass">
+              <span>Текущий вес</span>
+              <strong data-current-weight={assembly.totalKg} aria-live="polite">{assembly.totalKg} кг</strong>
+              <span>Цель {barbell.targetKg} кг</span>
+            </div>
             <div className="barbell-scene">
               <div className="bar-shaft" aria-hidden="true"><i /><i /></div>
               <div className="barbell-sides">
                 {station.targets.map((target, index) => {
                   const installed = itemsIn(target.id).sort((a, b) => (b.weightKg ?? 0) - (a.weightKg ?? 0));
-                  const kg = installed.reduce((sum, item) => sum + (item.weightKg ?? 0), 0);
+                  const kg = index === 0 ? assembly.leftKg : assembly.rightKg;
                   return destination(target, <>
                     <span className="side-name">{index === 0 ? "Слева" : "Справа"}</span>
                     <strong className="side-weight">{kg}<small> кг</small></strong>
                     <span className="mounted" aria-hidden="true">
-                      {installed.map((item) => <span key={item.id} className={`mounted-plate mounted-${item.weightKg}`}><ItemArt item={item} station={station.stage} /></span>)}
-                      {installed.length < 2 && <span className="barbell-empty"><Icon name="plus" size={15} /></span>}
+                      <span className="mounted-plate base-plate"><Equipment name="plate" /></span>
+                      {installed.map((item) => <span key={item.id} className={`mounted-plate mounted-${item.weightKg}`}><ItemArt item={item} station="BARBELL" /></span>)}
                     </span>
-                    <span className="side-goal">{kg === 15 ? <><Icon name="check" size={16} /> Готово</> : "Из 15 кг"}</span>
-                  </>, `barbell-side ${kg === 15 ? "filled" : ""}`);
+                    <span className="side-goal">{[barbell.startingDiskKg, ...installed.map((item) => item.weightKg)].join(" + ")}</span>
+                  </>, "barbell-side");
                 })}
               </div>
             </div>
-            <p className="scene-caption">Учебный вес указан для дисков, без учёта грифа.</p>
+            <p className="scene-caption">Гриф {barbell.shaftKg} кг входит в общий вес.</p>
           </>
         )}
 
         {station.stage === "INVENTORY" && (
+          <>
+          <p className="inventory-floor">В проходе осталось {remaining} из {station.items.length}</p>
           <div className="inventory-zones">
             {station.targets.map((target) => {
               const stored = itemsIn(target.id);
@@ -191,11 +215,12 @@ export function Placements({ station, progress, place }: PlacementProps) {
               </>, stored.length === 2 ? "filled inventory-zone" : "inventory-zone");
             })}
           </div>
+          </>
         )}
       </div>
 
-      <div className={`placement-feedback ${feedback?.invalid ? "is-error" : ""}`} role="status" aria-live="polite" aria-atomic="true">
-        <Icon name={feedback?.invalid ? "alert" : selected ? "arrow" : "info"} size={17} />
+      <div className={`placement-feedback ${feedback?.error ? "is-error" : ""}`} role="status" aria-live="polite" aria-atomic="true">
+        <Icon name={feedback?.error ? "alert" : selected ? "arrow" : "info"} size={17} />
         <span>{feedback?.text ?? instruction}</span>
       </div>
 
@@ -209,7 +234,8 @@ export function Placements({ station, progress, place }: PlacementProps) {
               className="game-object"
               aria-label={item.label}
               aria-pressed={selected?.id === item.id}
-              disabled={placed}
+              disabled={placed && station.stage !== "BARBELL"}
+              data-mounted={assembly && placed ? assigned[item.id] : undefined}
               onClick={(event) => choose(event, item)}
               onPointerDown={(event) => pointerDown(event, item)}
               onPointerMove={pointerMove}
@@ -218,11 +244,22 @@ export function Placements({ station, progress, place }: PlacementProps) {
               onLostPointerCapture={(event) => pointerEnd(event, true)}
             >
               <span className="object-image"><ItemArt station={station.stage} item={item} /></span>
-              <span className="object-label">{placed && <Icon name="check" size={13} />}{shortLabel(station.stage, item)}</span>
+              <span className="object-label">{placed && (assembly ? (assigned[item.id] === "LEFT" ? "←" : "→") : <Icon name="check" size={13} />)}{shortLabel(station.stage, item)}</span>
             </button>
           );
         })}
       </div>
+      {assembly && (
+        <div className="assembly-actions">
+          <button className="button primary" type="button" onClick={verifyAssembly}>Проверить <Icon name="check" size={18} /></button>
+          {selected && Object.hasOwn(assigned, selected.id) && (
+            <button className="button secondary" type="button" onClick={removeSelected}>Снять выбранный диск</button>
+          )}
+          <button className="button quiet" type="button" onClick={() => setFeedback({
+            text: `Добавь по ${(barbell.targetKg - barbell.shaftKg) / 2 - barbell.startingDiskKg} кг с каждой стороны. Подбери одинаковые наборы.`,
+          })}>Подсказка</button>
+        </div>
+      )}
       {drag && createPortal(
         <div className="drag-ghost" aria-hidden="true" style={{ left: drag.x, top: drag.y }}>
           <ItemArt station={station.stage} item={drag.item} />

@@ -9,7 +9,7 @@ async function capture(page: Page, info: TestInfo, name: string) {
   await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true, animations: "disabled" });
 }
 
-test("23 действия, регулировка скамьи, ошибки и восстановление", async ({ page, isMobile }, info) => {
+test("маршрут, решения четырёх станций и восстановление", async ({ page, isMobile }, info) => {
   const problems: string[] = [];
   page.on("pageerror", (error) => problems.push(error.message));
   page.on("console", (entry) => { if (entry.type() === "error") problems.push(entry.text()); });
@@ -27,62 +27,72 @@ test("23 действия, регулировка скамьи, ошибки и 
   expect((await saved(page)).progress.phase).toBe("ready");
   await press("Назад");
   await press("Начать знакомство");
+  await expect(page.getByRole("heading", { name: "Твой маршрут" })).toBeVisible();
+  await press("Начать маршрут");
   await capture(page, info, "02-dumbbells");
 
   await move(placements.dumbbells[0]);
-  await move(["Пара · 12 кг", "Ячейка 16 кг"]);
+  await move(["Гантель А · 12 кг", "Ячейка 16 кг"]);
   await expect(status).toContainText("Ячейка 12 кг");
-  await expect(score(page, 1, 3)).toBeVisible();
+  await expect(score(page, 1, 5)).toBeVisible();
   await capture(page, info, "03-error");
   await press("Выйти");
   await press("Продолжить");
-  await expect(button(page, "Пара · 8 кг")).toBeDisabled();
+  await expect(button(page, "Гантель Б · 8 кг")).toBeDisabled();
   await page.reload();
   await press("Продолжить");
-  await expect(button(page, "Пара · 8 кг")).toBeDisabled();
+  await expect(button(page, "Гантель Б · 8 кг")).toBeDisabled();
   await press("Smart Start");
   await press("Назад");
-  await expect(score(page, 1, 3)).toBeVisible();
-  await move(placements.dumbbells[1]);
-  await move(placements.dumbbells[2]);
+  await expect(score(page, 1, 5)).toBeVisible();
+  for (const pair of placements.dumbbells.slice(1)) await move(pair);
 
   await expect(page.getByRole("heading", { name: "Гантели на месте" })).toBeVisible();
-  await capture(page, info, "04-red-lesson");
+  await capture(page, info, "04-station-result");
   await page.reload();
   await press("Продолжить");
   await press("Следующая станция");
   await capture(page, info, "05-barbell");
+  await expect(page.locator("[data-current-weight]")).toHaveText("60 кг");
   await move(placements.barbell[0]);
-  await move(["Диск Б · 5 кг", "Левая сторона"]);
-  await expect(status).toContainText("с другой стороны");
-  await press("Правая сторона");
-  await move(placements.barbell[2]);
-  await expect(button(page, "Левая сторона")).toContainText("15");
-  await expect(button(page, "Правая сторона")).toContainText("5");
-  await move(placements.barbell[3]);
+  await move(["Диск А · 5 кг", "Правая сторона"]);
+  await press("Проверить");
+  await expect(status).toContainText("не хватает 5 кг");
+  await expect(page.locator("[data-current-weight]")).toHaveText("75 кг");
+  await press("Маршрут");
+  await expect(page.locator(".route-stations li").first()).toContainText("Пройдено");
+  await press("Вернуться к заданию");
+  await expect(page.locator("[data-current-weight]")).toHaveText("75 кг");
+  await press("Диск А · 5 кг");
+  await press("Снять выбранный диск");
+  await move(placements.barbell[1]);
+  await expect(page.locator("[data-current-weight]")).toHaveText("80 кг");
+  await press("Проверить");
 
-  await expect(page.getByRole("heading", { name: "Диски по обе стороны" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Штанга собрана" })).toBeVisible();
   await press("Следующая станция");
   await expect(page.locator(".bench-view")).toHaveAttribute("data-model", "ready");
   await capture(page, info, "06-bench");
-  await press("Шаг 6: Фиксация и устойчивость");
-  await expect(page.locator(".bench-feedback")).toContainText("Сначала");
-  await expect(score(page, 0, 8)).toBeVisible();
-  await press("Отметить проверку");
-  await expect(button(page, "Шаг 1: Свободная скамья (выполнен)")).toBeDisabled();
-  for (let i = 1; i < 5; i += 1) await press("Отметить проверку");
+  await press("Сразу изменить наклон");
+  await expect(page.locator(".bench-feedback")).toContainText("освободи скамью");
+  await expect(score(page, 0, 4)).toBeVisible();
+  await press("Убрать гантель");
+  await press("Цилиндрическая ручка");
+  await expect(page.locator(".bench-feedback")).toContainText("перемещать скамью");
+  await press("Жёлтый штифт");
   await moveBenchPart(page, benchControls[0], isMobile, -18);
   await expect(button(page, benchControls[0])).toBeVisible();
   for (const control of benchControls.slice(0, 3)) await moveBenchPart(page, control, isMobile);
-  await expect(score(page, 6, 8)).toBeVisible();
+  await expect(score(page, 2, 4)).toBeVisible();
   await page.reload();
   await press("Продолжить");
-  await expect(score(page, 6, 8)).toBeVisible();
+  await expect(score(page, 2, 4)).toBeVisible();
+  await press("П-образный рычаг");
   for (const control of benchControls.slice(3)) await moveBenchPart(page, control, isMobile);
-  await expect(score(page, 7, 8)).toBeVisible();
+  await expect(score(page, 3, 4)).toBeVisible();
   await expect(page.locator(".bench-feedback")).toHaveText("Фиксация сиденья проверена.");
-  await button(page, "Отметить проверку").scrollIntoViewIfNeeded();
-  await press("Отметить проверку");
+  await button(page, "Проверить устойчивость").scrollIntoViewIfNeeded();
+  await press("Проверить устойчивость");
 
   await expect(page.getByRole("heading", { name: "Скамья готова" })).toBeVisible();
   await press("Следующая станция");
@@ -92,7 +102,7 @@ test("23 действия, регулировка скамьи, ошибки и 
   await press("Стойка ковриков");
   for (const pair of placements.inventory.slice(1)) await move(pair);
 
-  await expect(page.getByRole("heading", { name: "Зона свободна" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Проход свободен" })).toBeVisible();
   await press("К результату");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("завершён");
   await capture(page, info, "08-finish");
@@ -109,7 +119,7 @@ test("23 действия, регулировка скамьи, ошибки и 
   await expect(page.getByRole("heading", { level: 1 })).toContainText("завершён");
   await press("Пройти ещё раз");
   await press("Начать заново");
-  await expect(score(page, 0, 3)).toBeVisible();
+  await expect(score(page, 0, 5)).toBeVisible();
   await noOverflow(page);
   expect(problems).toEqual([]);
 });
@@ -128,12 +138,13 @@ test("пропуск и повреждённая запись не запуск�
 test("клавиатура, перетаскивание и следующее нажатие", async ({ page, isMobile }) => {
   await page.goto("");
   await activate(page, "Начать знакомство", isMobile);
-  await button(page, "Пара · 8 кг").press("Enter");
+  await activate(page, "Начать маршрут", isMobile);
+  await button(page, "Гантель Б · 8 кг").press("Enter");
   await expect(button(page, "Ячейка 8 кг")).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(score(page, 1, 3)).toBeVisible();
+  await expect(score(page, 1, 5)).toBeVisible();
 
-  const source = await button(page, "Пара · 12 кг").boundingBox();
+  const source = await button(page, "Гантель А · 12 кг").boundingBox();
   const target = await button(page, "Ячейка 12 кг").boundingBox();
   const from = { x: source!.x + source!.width / 2, y: source!.y + source!.height / 2 };
   const to = { x: target!.x + target!.width / 2, y: target!.y + target!.height / 2 };
@@ -152,7 +163,7 @@ test("клавиатура, перетаскивание и следующее �
     await page.mouse.move(to.x, to.y, { steps: 10 });
     await page.mouse.up();
   }
-  await expect(score(page, 2, 3)).toBeVisible();
-  await put(page, placements.dumbbells[2], isMobile);
+  await expect(score(page, 2, 5)).toBeVisible();
+  for (const pair of placements.dumbbells.slice(2)) await put(page, pair, isMobile);
   await expect(button(page, "Следующая станция")).toBeVisible();
 });

@@ -1,6 +1,6 @@
 import type { Ref } from "react";
 import { lastStation, stationDetails, stations, type StationId } from "../engine/scenario";
-import type { Phase } from "../engine/game";
+import type { Phase, Progress } from "../engine/game";
 import type { Training } from "../engine/store";
 import { asset, Equipment, Icon, type ArtName, type IconName } from "./graphics";
 
@@ -31,29 +31,48 @@ export function Home({ heading, phase, lessonIndex, begin, skip, restart }: {
   const hasResult = phase === "complete" || phase === "lesson" && lessonIndex === lastStation;
   return (
     <section className="welcome">
-      <div className="welcome-copy">
-        <p className="accent-label">Знакомство с тренажёрным залом</p>
-        <h1 ref={heading} tabIndex={-1} id="welcome-title">Первый<br /><span>подход</span></h1>
-        <p className="intro-text">Четыре ситуации, с которыми можно столкнуться в зале. Расставь гантели, собери штангу, проверь скамью и убери инвентарь.</p>
-        <div className="welcome-actions">
+      <p className="home-label">Главная</p>
+      <article className="onboarding-card">
+        <figure className="welcome-image">
+          <img src={asset("rack-mobile")} width={1024} height={1360} alt="" fetchPriority="high" />
+        </figure>
+        <div className="welcome-copy">
+          <h1 ref={heading} tabIndex={-1} id="welcome-title">Первый подход</h1>
+          <p className="intro-text">Пройди четыре станции и подготовься к первому визиту в зал.</p>
           <button type="button" className="button primary" onClick={begin}>
             {hasResult ? "Открыть результат" : phase === "ready" ? "Начать знакомство" : "Продолжить"} <Icon name="arrow" />
           </button>
-          {phase !== "ready" && <button type="button" className="button quiet" onClick={restart}>Начать заново</button>}
-          <button type="button" className="button quiet" onClick={skip}>Пропустить</button>
         </div>
+      </article>
+      <div className="welcome-actions">
+        {phase !== "ready" && <button type="button" className="button quiet" onClick={restart}>Начать заново</button>}
+        <button type="button" className="button quiet" onClick={skip}>Пропустить</button>
       </div>
-      <figure className="welcome-image">
-        <picture>
-          <source media="(max-width: 699px)" srcSet={asset("rack-mobile")} />
-          <img src={asset("rack")} width={1360} height={1020} alt="" fetchPriority="high" />
-        </picture>
-      </figure>
-      <ol className="welcome-stations" aria-label="Четыре станции">
-        {stations.map(({ stage }) => (
-          <li key={stage}><Icon name={stationIcons[stage]} size={19} />{stationDetails[stage].name}</li>
-        ))}
+    </section>
+  );
+}
+
+export function Route({ heading, progress, begin }: { heading: Heading; progress: Progress; begin: () => void }) {
+  return (
+    <section className="route">
+      <h1 ref={heading} tabIndex={-1}>Твой маршрут</h1>
+      <p className="intro-text">Четыре ситуации перед первым подходом в зале.</p>
+      <ol className="route-stations">
+        {stations.map(({ stage }, index) => {
+          const completed = index < progress.stageIndex;
+          const current = index === progress.stageIndex;
+          return <li key={stage} aria-current={current ? "step" : undefined}>
+            <span className="route-number">{completed ? <Icon name="check" size={16} /> : index + 1}</span>
+            <div><strong>{stationDetails[stage].name}</strong>
+              <span>{completed ? "Пройдено" : current ? "Можно начать" : "После предыдущей станции"}</span>
+            </div>
+            <Equipment name={stationArt[stage]} />
+          </li>;
+        })}
       </ol>
+      <button type="button" className="button primary" onClick={begin}>
+        {progress.phase === "ready" ? "Начать маршрут" : "Вернуться к заданию"} <Icon name="arrow" />
+      </button>
     </section>
   );
 }
@@ -64,18 +83,15 @@ export function Lesson({ heading, index, next }: { heading: Heading; index: numb
   const final = index === lastStation;
   return (
     <section className={`lesson lesson-${station.stage.toLowerCase()}`}>
-      <div className="lesson-copy">
-        <span className="success-symbol"><Icon name="check" size={37} /></span>
-        <p className="accent-label">Станция {index + 1} из {stations.length} пройдена</p>
-        <h1 ref={heading} tabIndex={-1}>{detail.lessonTitle}</h1>
-        <p className="intro-text">{detail.lesson}</p>
-      </div>
       <div className="lesson-visual" aria-hidden="true">
         <Equipment name={stationArt[station.stage]} />
       </div>
-      <div className="lesson-actions">
-        <span>{final ? "Четыре станции пройдены" : `Дальше — ${stationDetails[stations[index + 1].stage].name.toLocaleLowerCase("ru-RU")}`}</span>
-        <button type="button" className="button ink" onClick={next}>
+      <div className="lesson-copy">
+        <span className="success-symbol"><Icon name="check" size={30} /></span>
+        <p className="accent-label">Станция {index + 1} из {stations.length} пройдена</p>
+        <h1 ref={heading} tabIndex={-1}>{detail.lessonTitle}</h1>
+        <p className="intro-text">{detail.lesson}</p>
+        <button type="button" className="button primary" onClick={next}>
           {final ? "К результату" : "Следующая станция"} <Icon name="arrow" />
         </button>
       </div>

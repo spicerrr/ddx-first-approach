@@ -6,10 +6,10 @@ import { readData, saveData, withUiEvent, type LocalData, type Training } from "
 import { BenchChecks } from "./ui/bench";
 import { Icon } from "./ui/graphics";
 import { Placements } from "./ui/placements";
-import { Finish, Home, Lesson, Skip, TrainingInfo } from "./ui/screens";
+import { Finish, Home, Lesson, Route, Skip, TrainingInfo } from "./ui/screens";
 import "./style.css";
 
-type EntryView = "home" | "play" | "skip";
+type EntryView = "home" | "route" | "play" | "skip";
 type View = EntryView | "training";
 
 function App() {
@@ -18,6 +18,7 @@ function App() {
   const [storageIssue, setStorageIssue] = useState(loaded.status);
   const [view, setView] = useState<View>("home");
   const [training, setTraining] = useState<{ target: Training; from: EntryView }>({ target: "smart-start", from: "home" });
+  const screen = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const resetDialog = useRef<HTMLDialogElement>(null);
   const session = data.progress;
@@ -35,6 +36,7 @@ function App() {
 
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
+    screen.current?.scrollTo({ top: 0, behavior: "instant" });
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [view, session.phase, session.stageIndex]);
 
@@ -53,10 +55,14 @@ function App() {
     setView("training");
   }
 
-  function begin() {
+  function enterStation() {
     setStorageIssue((issue) => issue === "invalid" ? "ok" : issue);
     write({ ...data, progress: start(session) });
     setView("play");
+  }
+
+  function begin() {
+    setView(session.phase === "ready" ? "route" : "play");
   }
 
   function action(input: Action) {
@@ -75,13 +81,17 @@ function App() {
   const showReset = () => resetDialog.current?.showModal();
 
   return (
-    <div className={`app${lesson ? " app-lesson" : ""}`}>
+    <div className={`app${lesson ? " app-lesson" : ""}${view === "home" ? " app-home" : ""}`} ref={screen}>
       <header className="site-header">
         <div className="shell header-inner">
           <button type="button" className="wordmark" onClick={home} aria-label="Первый подход — главная">
             <strong>DDX</strong><span>FITNESS</span>
           </button>
-          {view === "play" && <button type="button" className="button quiet" onClick={home}>Выйти <Icon name="close" size={18} /></button>}
+          {(view === "play" || view === "route") && <div className="header-actions">
+            {view === "play" && session.phase === "playing" &&
+              <button type="button" className="button quiet" onClick={() => setView("route")}>Маршрут</button>}
+            <button type="button" className="button quiet" onClick={home}>Выйти <Icon name="close" size={18} /></button>
+          </div>}
           {(view === "home" || view === "skip") && <button type="button" className="button quiet training-link" onClick={() => openTraining("smart-start")}>Smart Start <Icon name="external" size={17} /></button>}
         </div>
       </header>
@@ -96,6 +106,7 @@ function App() {
           </div>
         )}
         {view === "home" && <Home heading={heading} phase={session.phase} lessonIndex={session.stageIndex} begin={begin} skip={() => setView("skip")} restart={showReset} />}
+        {view === "route" && <Route heading={heading} progress={session} begin={enterStation} />}
         {view === "skip" && <Skip heading={heading} back={home} training={() => openTraining("smart-start")} />}
         {view === "training" && <TrainingInfo heading={heading} active={training.target} back={() => setView(training.from)} />}
 
@@ -117,14 +128,14 @@ function App() {
                 <p className="accent-label">Станция {session.stageIndex + 1} из {stations.length}</p>
                 <h1 ref={heading} tabIndex={-1}>{station.title}</h1>
               </div>
-              <p className="stage-score" aria-label={`Выполнено ${stationProgress(session, station)} из ${stationTotal(station)}`}>
+              {station.stage !== "BARBELL" && <p className="stage-score" aria-label={`Выполнено ${stationProgress(session, station)} из ${stationTotal(station)}`}>
                 <strong>{stationProgress(session, station)}</strong><span> / {stationTotal(station)}</span>
-              </p>
+              </p>}
             </div>
             <p className="game-instruction">{stationDetails[station.stage].instruction}</p>
             {station.stage === "BENCH"
               ? <BenchChecks station={station} progress={session} submit={action} />
-              : <Placements station={station as Station & { stage: PlacementStation }} progress={session} place={(item, destination) => action({ kind: "place", stage: station.stage as PlacementStation, item, destination })} />}
+              : <Placements station={station as Station & { stage: PlacementStation }} progress={session} submit={action} />}
             <div className="stage-footer">
               <button type="button" className="button quiet training-link" onClick={() => openTraining("smart-start")}>Smart Start <Icon name="external" size={17} /></button>
             </div>
@@ -132,7 +143,7 @@ function App() {
         )}
       </main>
 
-      <footer className="site-footer"><div className="shell">Неофициальный прототип для DDX Fitness</div></footer>
+      {view === "home" && <footer className="site-footer"><div className="shell">Неофициальный макет DDX Fitness</div></footer>}
 
       <dialog className="reset-dialog" ref={resetDialog} aria-labelledby="reset-heading">
         <form method="dialog">

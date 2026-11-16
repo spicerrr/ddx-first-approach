@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { newProgress, nextStation, start, stationProgress, submit } from "./src/engine/game";
-import { stations, totalActions } from "./src/engine/scenario";
+import { barbellLayout } from "./src/engine/barbell";
+import { legacyVersion, stations } from "./src/engine/scenario";
 import { decode, freshData, migrate, readData, saveData, storageKey, withUiEvent } from "./src/engine/store";
 
 const at = "2026-11-16T09:00:00.000Z";
@@ -8,22 +9,18 @@ const place = (stage, item, destination) => ({ kind: "place", stage, item, desti
 const bench = (check) => ({ kind: "bench", check });
 const adjust = (part) => ({ kind: "bench-adjustment", part });
 
+const disk = (item, side) => place("BARBELL", item, side);
+const checkBarbell = { kind: "check-barbell" };
 const actions = [
   [
-    place("DUMBBELLS", "PAIR_8", "RACK_8"),
-    place("DUMBBELLS", "PAIR_12", "RACK_12"),
-    place("DUMBBELLS", "PAIR_16", "RACK_16"),
+    place("DUMBBELLS", "DB_8_B", "RACK_8"),
+    place("DUMBBELLS", "DB_12_A", "RACK_12"),
+    place("DUMBBELLS", "DB_12_B", "RACK_12"),
+    place("DUMBBELLS", "DB_16_A", "RACK_16"),
+    place("DUMBBELLS", "DB_16_B", "RACK_16"),
   ],
-  [
-    place("BARBELL", "DISK_5_A", "LEFT"),
-    place("BARBELL", "DISK_5_B", "RIGHT"),
-    place("BARBELL", "DISK_10_A", "RIGHT"),
-    place("BARBELL", "DISK_10_B", "LEFT"),
-  ],
-  [
-    ...["AREA_CLEAR", "UNLOADED", "MODEL_GUIDANCE", "ASK_TRAINER_IF_UNSURE", "NO_FORCE"].map(bench),
-    adjust("backrest"), adjust("seat"), bench("VERIFY_LOCK"),
-  ],
+  [disk("DISK_10_A", "LEFT"), disk("DISK_10_B", "RIGHT"), checkBarbell],
+  [bench("UNLOADED"), adjust("backrest"), adjust("seat"), bench("VERIFY_LOCK")],
   [
     place("INVENTORY", "MAT_1", "MATS"), place("INVENTORY", "MAT_2", "MATS"),
     place("INVENTORY", "BAND_1", "BANDS"), place("INVENTORY", "BAND_2", "BANDS"),
@@ -49,14 +46,12 @@ function envelope(progress) {
 }
 
 describe("Правила и переходы", () => {
-  it("проводит через 23 действия, четыре пояснения и единственное завершение", () => {
-    expect(totalActions).toBe(23);
-    expect(actions.map((group) => group.length)).toEqual([3, 4, 8, 8]);
+  it("ведёт через четыре станции и завершает сессию один раз", () => {
     let progress = atStation(0);
     for (const [index, group] of actions.entries()) {
       for (const [step, action] of group.entries()) {
         progress = accept(progress, action);
-        expect(stationProgress(progress, stations[index])).toBe(step + 1);
+        expect(stationProgress(progress, stations[index])).toBe(index === 1 ? Number(action === checkBarbell) : step + 1);
       }
       expect(progress.phase).toBe("lesson");
       expect(progress.stageIndex).toBe(index);
@@ -83,31 +78,54 @@ describe("Правила и переходы", () => {
 
   it("неправильная ячейка и повторное размещение не меняют стойку", () => {
     const state = accept(atStation(0), actions[0][0]);
-    const invalid = submit(state, place("DUMBBELLS", "PAIR_12", "RACK_16"));
+    const invalid = submit(state, place("DUMBBELLS", "DB_12_A", "RACK_16"));
     expect(invalid).toMatchObject({ accepted: false, message: expect.stringContaining("Ячейка 12 кг") });
     expect(invalid.progress).toBe(state);
     expect(submit(state, actions[0][0]).progress).toBe(state);
   });
 
-  it("штанга не принимает два диска одной массы на одну сторону", () => {
-    const state = accept(atStation(1), actions[1][0]);
-    expect(submit(state, place("BARBELL", "DISK_5_B", "LEFT"))).toMatchObject({ accepted: false, progress: state });
-    const threeDiscs = actions[1].slice(1, 3).reduce(accept, state);
-    expect(threeDiscs.phase).toBe("playing");
-    expect(accept(threeDiscs, actions[1][3]).phase).toBe("lesson");
+  it("различает недовес, перевес, разницу масс и разницу наборов", () => {
+    const initial = atStation(1);
+    expect(barbellLayout(initial.placements.BARBELL)).toMatchObject({ totalKg: 60, leftKg: 20, rightKg: 20 });
+    const under = [disk("DISK_10_A", "LEFT"), disk("DISK_5_A", "RIGHT")].reduce(accept, initial);
+    expect(barbellLayout(under.placements.BARBELL).totalKg).toBe(75);
+    expect(submit(under, checkBarbell)).toMatchObject({ accepted: false, progress: under, message: "До цели не хватает 5 кг." });
+    const mixed = accept(under, disk("DISK_5_B", "RIGHT"));
+    expect(barbellLayout(mixed.placements.BARBELL)).toMatchObject({ totalKg: 80, leftKg: 30, rightKg: 30, symmetric: false });
+    expect(submit(mixed, checkBarbell)).toMatchObject({ accepted: false, progress: mixed, message: expect.stringContaining("одинаковые наборы") });
+    const unbalanced = accept(mixed, disk("DISK_10_A", "RIGHT"));
+    expect(submit(unbalanced, checkBarbell)).toMatchObject({ accepted: false, progress: unbalanced, message: expect.stringContaining("Слева 20 кг") });
+    const over = accept(mixed, disk("DISK_5_C", "LEFT"));
+    expect(submit(over, checkBarbell)).toMatchObject({ accepted: false, progress: over, message: expect.stringContaining("Убери 5 кг") });
+  });
+
+  it("сохраняет черновик, позволяет переставить и снять диск, засчитывает только проверку", () => {
+    const initial = atStation(1);
+    const loaded = actions[1].slice(0, 2).reduce(accept, initial);
+    expect(decode(envelope(loaded))?.progress).toEqual(loaded);
+    expect(loaded.phase).toBe("playing");
+    const removed = accept(loaded, { kind: "remove-disk", item: "DISK_10_A" });
+    expect(barbellLayout(removed.placements.BARBELL).totalKg).toBe(70);
+    expect(submit(removed, { kind: "remove-disk", item: "DISK_10_A" }).progress).toBe(removed);
+    const restored = accept(removed, disk("DISK_10_A", "LEFT"));
+    const complete = accept(restored, checkBarbell);
+    expect(complete.phase).toBe("lesson");
+    expect(submit(complete, checkBarbell).progress).toBe(complete);
+    const fives = [disk("DISK_5_A", "LEFT"), disk("DISK_5_B", "LEFT"), disk("DISK_5_C", "RIGHT"), disk("DISK_5_D", "RIGHT")];
+    expect(accept(fives.reduce(accept, initial), checkBarbell).phase).toBe("lesson");
   });
 
   it("скамья отклоняет пропуск шага и повтор уже пройденной проверки", () => {
     const state = atStation(2);
     const invalid = submit(state, bench("VERIFY_LOCK"));
     expect(invalid.progress).toBe(state);
-    expect(invalid.message).toContain("скамья свободна");
-    const accepted = accept(state, bench("AREA_CLEAR"));
-    expect(submit(accepted, bench("AREA_CLEAR")).accepted).toBe(false);
+    expect(invalid.message).toContain("освободи скамью");
+    const accepted = accept(state, bench("UNLOADED"));
+    expect(submit(accepted, bench("UNLOADED")).accepted).toBe(false);
   });
 
   it("требует настройку обеих подушек перед финальной проверкой", () => {
-    const state = actions[2].slice(0, 5).reduce(accept, atStation(2));
+    const state = accept(atStation(2), bench("UNLOADED"));
     expect(submit(state, bench("VERIFY_LOCK")).progress).toBe(state);
     expect(submit(state, adjust("seat")).progress).toBe(state);
     const backrestDone = accept(state, adjust("backrest"));
@@ -159,15 +177,24 @@ describe("Локальное состояние", () => {
     expect(migrate(v2)).toEqual(envelope(accept(atStation(0), actions[0][0])));
   });
 
-  it("сохраняет пройденную станцию из старого v3 и даёт пройти практику при незавершённой станции", () => {
-    const partial = actions[2].slice(0, 5).reduce(accept, atStation(2));
-    const complete = actions[2].reduce(accept, atStation(2));
-    for (const progress of [partial, complete, atStation(3)]) {
-      const { benchAdjustments: _removed, ...oldProgress } = progress;
-      expect(decode(envelope(oldProgress))?.progress).toEqual(progress);
-    }
-    expect(decode(envelope({ ...partial, benchAdjustments: ["seat"] }))).toBeNull();
-    expect(decode(envelope({ ...complete, benchAdjustments: ["backrest"] }))).toBeNull();
+  it("переносит пройденные станции из 1.0 и сохраняет уже проверенную спинку", () => {
+    const readyForSeat = actions[2].slice(0, 2).reduce(accept, atStation(2));
+    const legacy = {
+      ...envelope(readyForSeat),
+      scenarioVersion: legacyVersion,
+      progress: {
+        ...readyForSeat,
+        placements: {
+          ...readyForSeat.placements,
+          DUMBBELLS: { PAIR_8: "RACK_8", PAIR_12: "RACK_12", PAIR_16: "RACK_16" },
+          BARBELL: { DISK_5_A: "LEFT", DISK_5_B: "RIGHT", DISK_10_A: "LEFT", DISK_10_B: "RIGHT" },
+        },
+        benchChecks: ["AREA_CLEAR", "UNLOADED", "MODEL_GUIDANCE", "ASK_TRAINER_IF_UNSURE", "NO_FORCE"],
+      },
+    };
+    expect(decode(legacy)?.progress).toEqual(readyForSeat);
+    expect(decode(envelope({ ...readyForSeat, benchAdjustments: ["seat"] }))).toBeNull();
+    expect(decode(envelope({ ...readyForSeat, benchChecks: ["UNLOADED", "VERIFY_LOCK"] }))).toBeNull();
   });
 
   it.each([null, 1, [], {}, { ...freshData(), format: 2 }, { ...freshData(), scenarioVersion: "0.1" }])(

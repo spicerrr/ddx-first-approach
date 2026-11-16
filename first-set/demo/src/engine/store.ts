@@ -1,6 +1,7 @@
-import { newProgress, stationProgress, type GameEvent, type Phase, type Progress } from "./game";
-import { benchFinalCheck, benchParts, lastStation, placementDestination, scenarioVersion, stations, stationTotal,
-  type PlacementStation, type StationId } from "./scenario";
+import { checkBarbell } from "./barbell";
+import { newProgress, type GameEvent, type Phase, type Progress } from "./game";
+import { benchFinalCheck, benchParts, benchPreparation, lastStation, legacyStations, legacyVersion,
+  placementDestination, scenarioVersion, stations, stationTotal, type StationId } from "./scenario";
 
 export const storageKey = "first-approach-interactive-v3";
 const legacyKey = "first-approach-interactive-v2";
@@ -10,7 +11,7 @@ type StoragePort = Pick<Storage, "getItem" | "setItem">;
 export type Training = "smart-start" | "intro";
 export type UiEvent =
   | { type: "onboarding_offer_exposed"; at: string }
-  | { type: "intro_cta_clicked"; at: string; from: "home" | "play" | "skip"; destination: Training };
+  | { type: "intro_cta_clicked"; at: string; from: "home" | "route" | "play" | "skip"; destination: Training };
 
 export type LocalData = {
   format: 3;
@@ -54,10 +55,14 @@ function isUiEvent(entry: unknown): entry is UiEvent {
   if (entry.type === "onboarding_offer_exposed") return true;
   return entry.type === "intro_cta_clicked"
     && (entry.destination === "smart-start" || entry.destination === "intro")
-    && (entry.from === "home" || entry.from === "play" || entry.from === "skip");
+    && (entry.from === "home" || entry.from === "route" || entry.from === "play" || entry.from === "skip");
 }
 
-function validateProgress(value: unknown): Progress | null {
+function hasExpectedCount(count: number, total: number, completed: boolean, inPlay: boolean) {
+  return completed ? count === total : inPlay ? count < total : count === 0;
+}
+
+function validateProgress(value: unknown, legacy = false): Progress | null {
   if (!record(value) || !record(value.placements) || !Array.isArray(value.benchChecks)
     || !Array.isArray(value.events) || typeof value.stageIndex !== "number") return null;
 
@@ -66,63 +71,89 @@ function validateProgress(value: unknown): Progress | null {
   if (!Number.isInteger(stageIndex) || stageIndex < 0 || stageIndex > lastStation) return null;
   if (phase === "ready" && stageIndex !== 0 || phase === "complete" && stageIndex !== lastStation) return null;
 
+  const completedCount = stageIndex + (phase === "lesson" || phase === "complete" ? 1 : 0);
   const validated: Progress = { ...newProgress(), phase, stageIndex };
-  for (const [index, station] of stations.entries()) {
+  const sourceStations = legacy ? legacyStations : stations;
+
+  for (const [index, station] of sourceStations.entries()) {
+    const completed = index < completedCount;
+    const inPlay = phase === "playing" && index === stageIndex;
+
     if (station.stage === "BENCH") {
       if (benchChecks.length > station.items.length || benchChecks.some((id, i) => id !== station.items[i].id)) return null;
-      validated.benchChecks = benchChecks;
       const verifyIndex = station.items.findIndex(({ id }) => id === benchFinalCheck);
-      // Older saves had only the checklist. Keep previously completed stations complete.
-      const adjustments = value.benchAdjustments === undefined
+      const adjustments = value.benchAdjustments === undefined && legacy
         ? benchChecks.length > verifyIndex ? [...benchParts] : []
         : value.benchAdjustments;
       if (!Array.isArray(adjustments) || adjustments.length > benchParts.length
         || adjustments.some((part, i) => part !== benchParts[i])
         || (benchChecks.length < verifyIndex && adjustments.length > 0)
         || (benchChecks.length > verifyIndex && adjustments.length < benchParts.length)) return null;
+      if (!hasExpectedCount(benchChecks.length + adjustments.length, stationTotal(station), completed, inPlay)) return null;
+      validated.benchChecks = benchChecks.filter((id) => id === benchPreparation || id === benchFinalCheck);
       validated.benchAdjustments = adjustments;
-    } else {
-      const values = placements[station.stage];
-      if (!record(values)) return null;
-      const occupied = new Set<string>();
-      const assigned: Record<string, string> = {};
-      for (const [id, target] of Object.entries(values)) {
-        const item = station.items.find((candidate) => candidate.id === id);
-        if (!item || typeof target !== "string" || !station.targets.some((candidate) => candidate.id === target)) return null;
-        if (station.stage === "BARBELL") {
-          const slot = `${target}/${item.weightKg}`;
-          if (occupied.has(slot)) return null;
-          occupied.add(slot);
-        } else if (placementDestination(station.stage, id) !== target) {
-          return null;
-        }
-        assigned[id] = target;
-      }
-      validated.placements[station.stage as PlacementStation] = assigned;
+      continue;
     }
 
-    const completed = index < stageIndex || index === stageIndex && (phase === "lesson" || phase === "complete");
-    const inPlay = phase === "playing" && index === stageIndex;
-    const count = stationProgress(validated, station);
-    if (completed ? count !== stationTotal(station) : inPlay ? count >= stationTotal(station) : count !== 0) return null;
+    const values = placements[station.stage];
+    if (!record(values)) return null;
+    const assigned: Record<string, string> = {};
+    const occupied = new Set<string>();
+    for (const [id, target] of Object.entries(values)) {
+      const item = station.items.find((candidate) => candidate.id === id);
+      if (!item || typeof target !== "string" || !station.targets.some((candidate) => candidate.id === target)) return null;
+      if (station.stage === "BARBELL") {
+        const slot = `${target}/${item.weightKg}`;
+        if (legacy && occupied.has(slot)) return null;
+        occupied.add(slot);
+      } else {
+        const expected = legacy && station.stage === "DUMBBELLS"
+          ? item.id.replace(/^PAIR_/, "RACK_")
+          : placementDestination(station.stage, item);
+        if (expected !== target) return null;
+      }
+      assigned[id] = target;
+    }
+
+    if (station.stage === "BARBELL" && !legacy) {
+      if (completed && !checkBarbell(assigned).accepted) return null;
+      if (!completed && !inPlay && Object.keys(assigned).length) return null;
+    } else if (!hasExpectedCount(Object.keys(assigned).length, station.items.length, completed, inPlay)) {
+      return null;
+    }
+
+    if (legacy && station.stage === "DUMBBELLS") {
+      const singles = stations[index].items;
+      for (const item of singles) {
+        const oldTarget = assigned[`PAIR_${item.weightKg}`];
+        if (oldTarget) validated.placements.DUMBBELLS[item.id] = oldTarget;
+      }
+    } else {
+      if (legacy && station.stage === "BARBELL" && completed) {
+        // The two existing 10 kg disks form a valid completed layout for the new target.
+        delete assigned.DISK_5_A;
+        delete assigned.DISK_5_B;
+      }
+      validated.placements[station.stage] = assigned;
+    }
   }
 
   if (!events.every(isGameEvent)) return null;
   const keys = events.map(eventKey);
-  if (new Set(keys).size !== keys.length) return null;
-  const completedStations = stations.filter((station) => stationProgress(validated, station) === stationTotal(station));
   const expected = phase === "ready" ? [] : [
     "game_session_started",
-    ...completedStations.map(({ stage }) => stage),
-    ...(completedStations.length === stations.length ? ["game_session_completed"] : []),
+    ...stations.slice(0, completedCount).map(({ stage }) => stage),
+    ...(completedCount === stations.length ? ["game_session_completed"] : []),
   ];
   if (expected.length !== keys.length || expected.some((key, i) => keys[i] !== key)) return null;
   return { ...validated, events };
 }
 
 export function decode(value: unknown): LocalData | null {
-  if (!record(value) || value.format !== 3 || value.scenarioVersion !== scenarioVersion) return null;
-  const progress = validateProgress(value.progress);
+  if (!record(value) || value.format !== 3) return null;
+  const legacy = value.scenarioVersion === legacyVersion;
+  if (!legacy && value.scenarioVersion !== scenarioVersion) return null;
+  const progress = validateProgress(value.progress, legacy);
   if (!progress || !Array.isArray(value.uiEvents)
     || value.uiEvents.length > uiEventLimit || !value.uiEvents.every(isUiEvent)) return null;
   return { format: 3, scenarioVersion, progress, uiEvents: value.uiEvents };
@@ -147,7 +178,7 @@ export function migrate(value: unknown): LocalData | null {
     placements: value.placements,
     benchChecks: value.benchChecks,
     events,
-  });
+  }, true);
   return progress ? { ...freshData(), progress } : null;
 }
 
