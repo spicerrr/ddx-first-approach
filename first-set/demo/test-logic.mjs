@@ -1,152 +1,165 @@
-import test from "node:test";
-import assert from "node:assert/strict";
-import fs from "node:fs";
-import vm from "node:vm";
+import { describe, expect, it } from "vitest";
+import { newProgress, nextStation, start, stationProgress, submit } from "./src/engine/game";
+import { stations, totalActions } from "./src/engine/scenario";
+import { decode, freshData, migrate, readData, saveData, storageKey, withUiEvent } from "./src/engine/store";
 
-const js = fs.readFileSync(new URL("./logic.js", import.meta.url), "utf8");
+const at = "2026-11-16T09:00:00.000Z";
+const place = (stage, item, destination) => ({ kind: "place", stage, item, destination });
+const bench = (check) => ({ kind: "bench", check });
 
-function boot(storage = new Map()) {
-  const elements = new Map();
-  class Element {
-    constructor(tag = "div") {
-      this.tag = tag;
-      this.children = [];
-      this.handlers = {};
-      this.textContent = "";
-      this.disabled = false;
-    }
-    append(...nodes) { this.children.push(...nodes); }
-    insertAdjacentHTML() {}
-    addEventListener(name, fn) { this.handlers[name] = fn; }
-    setAttribute() {}
-    querySelector(selector) {
-      if (selector.startsWith("button")) return this.children.find(node => !node.disabled) || null;
-      return { focus() {}, tabIndex: -1 };
-    }
-    focus() {}
-    click() {
-      assert.ok(!this.disabled, "button is not disabled");
-      assert.equal(typeof this.handlers.click, "function", "button has a click handler");
-      this.handlers.click();
-    }
-  }
-  const main = new Element("main");
-  Object.defineProperty(main, "innerHTML", {
-    set(markup) { this.markup = markup; elements.clear(); },
-    get() { return this.markup; }
-  });
-  const document = {
-    createElement: tag => new Element(tag),
-    getElementById(id) {
-      if (id === "screen") return main;
-      if (!elements.has(id)) elements.set(id, new Element());
-      return elements.get(id);
-    }
-  };
-  const localStorage = {
-    getItem: key => storage.get(key) ?? null,
-    setItem: (key, value) => storage.set(key, value)
-  };
-  const context = vm.createContext({ document, localStorage, console });
-  vm.runInContext(js + `
-    globalThis.testApi = {
-      start,
-      setSelection(id) { selectedItemId = id; },
-      placeSelected,
-      readState() { return JSON.parse(JSON.stringify(state)); }
-    };
-  `, context, { filename: "logic.js" });
-  return { api: context.testApi, storage, get(id) { return document.getElementById(id); } };
+const actions = [
+  [
+    place("DUMBBELLS", "PAIR_8", "RACK_8"),
+    place("DUMBBELLS", "PAIR_12", "RACK_12"),
+    place("DUMBBELLS", "PAIR_16", "RACK_16"),
+  ],
+  [
+    place("BARBELL", "DISK_5_A", "LEFT"),
+    place("BARBELL", "DISK_5_B", "RIGHT"),
+    place("BARBELL", "DISK_10_A", "RIGHT"),
+    place("BARBELL", "DISK_10_B", "LEFT"),
+  ],
+  ["AREA_CLEAR", "UNLOADED", "MODEL_GUIDANCE", "ASK_TRAINER_IF_UNSURE", "NO_FORCE", "VERIFY_LOCK"].map(bench),
+  [
+    place("INVENTORY", "MAT_1", "MATS"), place("INVENTORY", "MAT_2", "MATS"),
+    place("INVENTORY", "BAND_1", "BANDS"), place("INVENTORY", "BAND_2", "BANDS"),
+    place("INVENTORY", "BLOCK_1", "BLOCKS"), place("INVENTORY", "BLOCK_2", "BLOCKS"),
+    place("INVENTORY", "ROLLER_1", "ROLLERS"), place("INVENTORY", "ROLLER_2", "ROLLERS"),
+  ],
+];
+
+function accept(progress, action) {
+  const result = submit(progress, action, at);
+  expect(result.accepted).toBe(true);
+  return result.progress;
 }
 
-test("four stations, error recovery, unique completion events, and resume", () => {
-  const app = boot();
-  const { api } = app;
-  api.start();
-  assert.equal(api.readState().stageIndex, 0);
-  api.setSelection("PAIR_8");
-  api.placeSelected("DUMBBELLS", "RACK_12");
-  assert.equal(Object.keys(api.readState().placements.DUMBBELLS).length, 0, "wrong placement must not advance");
-  for (const [item, target] of [
-    ["PAIR_8", "RACK_8"], ["PAIR_12", "RACK_12"], ["PAIR_16", "RACK_16"]
-  ]) {
-    api.setSelection(item); api.placeSelected("DUMBBELLS", target);
-  }
-  assert.equal(api.readState().stageIndex, 1);
-  app.get("lessonActions").children[0].click(); // next station from full-screen explanation
+function atStation(index) {
+  let progress = start(newProgress(), at);
+  for (let i = 0; i < index; i += 1) progress = nextStation(actions[i].reduce(accept, progress));
+  return progress;
+}
 
-  api.setSelection("DISK_5_A"); api.placeSelected("BARBELL", "LEFT");
-  api.setSelection("DISK_5_B"); api.placeSelected("BARBELL", "LEFT");
-  assert.equal(Object.keys(api.readState().placements.BARBELL).length, 1, "duplicate weight on same side rejected");
-  for (const [item, side] of [
-    ["DISK_5_B", "RIGHT"], ["DISK_10_A", "LEFT"], ["DISK_10_B", "RIGHT"]
-  ]) {
-    api.setSelection(item); api.placeSelected("BARBELL", side);
-  }
-  assert.equal(api.readState().stageIndex, 2);
-  app.get("lessonActions").children[0].click();
+function envelope(progress) {
+  return { ...freshData(), progress };
+}
 
-  const selectBench = label => {
-    const button = app.get("targets").children.find(child => child.textContent === label);
-    assert.ok(button, `bench action available: ${label}`);
-    button.click();
-  };
-  selectBench("До использования убедиться в фиксации и устойчивости");
-  assert.equal(api.readState().benchChecks.length, 0, "out-of-order bench check rejected");
-  for (const label of [
-    "Убедиться, что скамья свободна",
-    "Убедиться, что на скамье нет нагрузки",
-    "Найти инструкцию или маркировку модели",
-    "При неуверенности обратиться к тренеру",
-    "Не применять силу к незнакомому механизму",
-    "До использования убедиться в фиксации и устойчивости"
-  ]) selectBench(label);
-  assert.equal(api.readState().stageIndex, 3);
-  app.get("lessonActions").children[0].click();
+describe("Правила и переходы", () => {
+  it("проводит через 21 действие, четыре пояснения и единственное завершение", () => {
+    expect(totalActions).toBe(21);
+    expect(actions.map((group) => group.length)).toEqual([3, 4, 6, 8]);
+    let progress = atStation(0);
+    for (const [index, group] of actions.entries()) {
+      for (const [step, action] of group.entries()) {
+        progress = accept(progress, action);
+        expect(stationProgress(progress, stations[index])).toBe(step + 1);
+      }
+      expect(progress.phase).toBe("lesson");
+      expect(progress.stageIndex).toBe(index);
+      expect(decode(envelope(progress))).toEqual(envelope(progress));
+      expect(submit(progress, group.at(-1)).progress).toBe(progress);
+      progress = nextStation(progress);
+    }
+    expect(progress.phase).toBe("complete");
+    expect(progress.events.map((event) => event.type)).toEqual([
+      "game_session_started",
+      "game_stage_completed", "game_stage_completed", "game_stage_completed", "game_stage_completed",
+      "game_session_completed",
+    ]);
+    expect(start(progress)).toBe(progress);
+    expect(nextStation(progress)).toBe(progress);
+    expect(decode(envelope(progress))).toEqual(envelope(progress));
+  });
 
-  for (const [item, zone] of [
-    ["MAT_1", "MATS"], ["BAND_1", "BANDS"],
-    ["BLOCK_1", "BLOCKS"], ["ROLLER_1", "ROLLERS"],
-    ["MAT_2", "MATS"], ["BAND_2", "BANDS"],
-    ["BLOCK_2", "BLOCKS"], ["ROLLER_2", "ROLLERS"]
-  ]) {
-    api.setSelection(item); api.placeSelected("INVENTORY", zone);
-  }
-  const finished = api.readState();
-  assert.equal(finished.done, true);
-  assert.equal(finished.events.filter(event => event.eventType === "game_stage_completed").length, 4);
-  assert.equal(finished.events.filter(event => event.eventType === "game_session_completed").length, 1);
-  assert.equal(boot(app.storage).api.readState().done, true, "state survives browser reload");
+  it("нельзя применить действие до начала или повторить запуск", () => {
+    const fresh = newProgress();
+    expect(submit(fresh, actions[0][0]).accepted).toBe(false);
+    expect(start(start(fresh, at), at).events).toHaveLength(1);
+  });
+
+  it("неправильная ячейка и повторное размещение не меняют стойку", () => {
+    const state = accept(atStation(0), actions[0][0]);
+    const invalid = submit(state, place("DUMBBELLS", "PAIR_12", "RACK_16"));
+    expect(invalid).toMatchObject({ accepted: false, message: expect.stringContaining("Ячейка 12 кг") });
+    expect(invalid.progress).toBe(state);
+    expect(submit(state, actions[0][0]).progress).toBe(state);
+  });
+
+  it("штанга не принимает два диска одной массы на одну сторону", () => {
+    const state = accept(atStation(1), actions[1][0]);
+    expect(submit(state, place("BARBELL", "DISK_5_B", "LEFT"))).toMatchObject({ accepted: false, progress: state });
+    const threeDiscs = actions[1].slice(1, 3).reduce(accept, state);
+    expect(threeDiscs.phase).toBe("playing");
+    expect(accept(threeDiscs, actions[1][3]).phase).toBe("lesson");
+  });
+
+  it("скамья отклоняет пропуск шага и повтор уже пройденной проверки", () => {
+    const state = atStation(2);
+    const invalid = submit(state, bench("VERIFY_LOCK"));
+    expect(invalid.progress).toBe(state);
+    expect(invalid.message).toContain("скамья свободна");
+    const accepted = accept(state, bench("AREA_CLEAR"));
+    expect(submit(accepted, bench("AREA_CLEAR")).accepted).toBe(false);
+  });
+
+  it("чужая зона на складе, неизвестный предмет и другая станция не принимаются", () => {
+    const state = accept(atStation(3), actions[3][0]);
+    expect(submit(state, place("INVENTORY", "MAT_2", "BANDS")).progress).toBe(state);
+    expect(submit(state, place("INVENTORY", "UNKNOWN", "MATS")).progress).toBe(state);
+    expect(submit(state, actions[0][0]).progress).toBe(state);
+    expect(state.placements.INVENTORY).toEqual({ MAT_1: "MATS" });
+  });
 });
 
-test("new onboarding starts without inheriting old station progress", () => {
-  const app = boot();
-  app.api.start();
-  app.api.setSelection("PAIR_8");
-  app.api.placeSelected("DUMBBELLS", "RACK_8");
-  assert.equal(Object.keys(app.api.readState().placements.DUMBBELLS).length, 1);
-  const anotherSession = boot(new Map());
-  assert.equal(Object.keys(anotherSession.api.readState().placements.DUMBBELLS).length, 0);
-});
+describe("Локальное состояние", () => {
+  it("сохраняет и восстанавливает уже принятые действия", () => {
+    const values = new Map();
+    const port = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+    const data = envelope(accept(atStation(0), actions[0][1]));
+    expect(saveData(data, port)).toBe(true);
+    expect(readData(port)).toEqual({ data, status: "ok" });
+    saveData(envelope(start(newProgress(), at)), port);
+    expect(readData(port).data.progress.placements.DUMBBELLS).toEqual({});
+  });
 
-test("CTA does not require a game session or clear an unfinished session", () => {
-  const app = boot();
-  const findButton = (id, part) => {
-    const element = app.get(id).children.find(node => node.textContent.includes(part));
-    assert.ok(element, `missing ${part} in ${id}`);
-    return element;
-  };
-  findButton("welcomeActions", "Smart Start").click();
-  assert.equal(app.api.readState().started, false, "early CTA does not start game");
-  assert.equal(app.api.readState().events.at(-1).eventType, "intro_cta_clicked");
-  findButton("ctaActions", "Назад").click();
-  findButton("welcomeActions", "Начать знакомство").click();
-  app.api.setSelection("PAIR_8");
-  app.api.placeSelected("DUMBBELLS", "RACK_8");
-  findButton("stageActions", "Smart Start").click();
-  const current = app.api.readState();
-  assert.equal(current.stageIndex, 0);
-  assert.equal(Object.keys(current.placements.DUMBBELLS).length, 1);
-  findButton("ctaActions", "Назад").click();
-  assert.equal(app.api.readState().stageIndex, 0);
+  it("сохраняет прогресс и события прохождения при переходе к занятиям", () => {
+    for (const progress of [newProgress(), atStation(2), actions[3].reduce(accept, atStation(3))]) {
+      const data = withUiEvent(envelope(progress), { type: "intro_cta_clicked", at, from: "play", destination: "smart-start" });
+      expect(data.progress).toBe(progress);
+      expect(decode(data)?.uiEvents).toHaveLength(1);
+    }
+  });
+
+  it("переносит действительное сохранение частичного прохождения из v2", () => {
+    const v2 = {
+      started: true, done: false, stageIndex: 0,
+      placements: { DUMBBELLS: { PAIR_8: "RACK_8" }, BARBELL: {}, INVENTORY: {} },
+      benchChecks: [],
+      events: [
+        { eventType: "game_session_started", occurredAt: at },
+        { eventType: "intro_cta_clicked", occurredAt: at, destination: "Smart Start" },
+      ],
+    };
+    expect(migrate(v2)).toEqual(envelope(accept(atStation(0), actions[0][0])));
+  });
+
+  it.each([null, 1, [], {}, { ...freshData(), format: 2 }, { ...freshData(), scenarioVersion: "0.1" }])(
+    "игнорирует неподдерживаемую запись %#", (value) => expect(decode(value)).toBeNull(),
+  );
+
+  it("отклоняет повреждённые размещения, ранний переход и дубли событий", () => {
+    const state = atStation(0);
+    expect(decode(envelope({ ...state, placements: { ...state.placements, DUMBBELLS: { PAIR_8: "RACK_16" } } }))).toBeNull();
+    expect(decode(envelope({ ...state, stageIndex: 1 }))).toBeNull();
+    expect(decode(envelope({ ...state, events: [...state.events, ...state.events] }))).toBeNull();
+    expect(decode(envelope({ ...state, benchChecks: ["AREA_CLEAR"] }))).toBeNull();
+  });
+
+  it("открывает чистый экран при повреждённом JSON и недоступном хранилище", () => {
+    const broken = { getItem: (key) => key === storageKey ? "{" : null, setItem() {} };
+    expect(readData(broken)).toEqual({ data: freshData(), status: "invalid" });
+    const forbidden = { getItem() { throw new Error(); }, setItem() { throw new Error(); } };
+    expect(readData(forbidden)).toEqual({ data: freshData(), status: "unavailable" });
+    expect(saveData(freshData(), forbidden)).toBe(false);
+  });
 });

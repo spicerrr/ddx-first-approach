@@ -46,7 +46,12 @@ assert list(validator.iter_errors({k: v for k, v in sample.items() if k != "stag
 assert list(validator.iter_errors({**sample, "memberName": "DO NOT PUBLISH"}))
 
 # Четыре основных документа; подробности реализации остаются в коде и контрактах.
-markdown_files = sorted(p.relative_to(repo).as_posix() for p in repo.rglob("*.md") if ".git" not in p.parts)
+generated_dirs = {".git", "node_modules", "dist", "test-results", "playwright-report"}
+markdown_files = sorted(
+    p.relative_to(repo).as_posix()
+    for p in repo.rglob("*.md")
+    if generated_dirs.isdisjoint(p.relative_to(repo).parts)
+)
 expected = sorted(["README.md", "first-set/ba/README.md", "first-set/sa/README.md", "first-set/demo/README.md"])
 assert markdown_files == expected, f"unexpected Markdown document tree: {markdown_files}"
 
