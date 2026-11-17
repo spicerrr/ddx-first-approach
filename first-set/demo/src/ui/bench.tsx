@@ -5,6 +5,7 @@ import type { BenchPose } from "./bench-view";
 import { CheckBurst } from "./celebration";
 import { asset, Equipment, Icon } from "./graphics";
 import { SceneButton } from "./scene-button";
+import { CoachMessage } from "./coach-message";
 
 const BenchView = lazy(() => import("./bench-view"));
 const lastNotch = benchNotches.length - 1;
@@ -68,15 +69,16 @@ export function BenchStation({ progress, submit }: { progress: Progress; submit:
 
   return (
     <section className="bench-station" data-bench-part={part} data-sandbox={complete || undefined}>
-      <div className="bench-visitor">
-        <span className="visitor-icon"><Icon name="person" size={19} /></span>
-        <p>«Поможешь настроить скамью? Спинку на {targetDegrees("backrest")}°, сиденье на {targetDegrees("seat")}°».</p>
-      </div>
+      <CoachMessage visitor={!complete} live>
+        {complete ? "Скамья свободна. Можешь попробовать другие положения или перейти к следующему делу."
+          : `Поможешь настроить скамью для жима? Спинку на ${targetDegrees("backrest")}°, сиденье на ${targetDegrees("seat")}°.`}
+      </CoachMessage>
       <ol className="bench-orders" aria-label="Настройки посетителя">
         {benchParts.map((item) => {
           const done = progress.benchAdjustments.includes(item);
           const name = exercises[item].title;
-          const order = <>{done && <Icon name="check" size={15} />}<span>{name}</span>{!complete && <strong>{targetDegrees(item)}°</strong>}</>;
+          const order = <><span className="bench-order-mark">{done ? <Icon name="check" size={14} /> : benchParts.indexOf(item) + 1}</span>
+            <span>{name}</span>{!complete && <strong>{targetDegrees(item)}°</strong>}</>;
           return (
             <li key={item} data-active={part === item || undefined} data-done={done || undefined}>
               {complete ? (
@@ -89,6 +91,13 @@ export function BenchStation({ progress, submit }: { progress: Progress; submit:
 
       <div className="bench-workshop" data-demo={showDemo || undefined} data-retry={retry || undefined}>
         <div className="bench-scene">
+          <div className="bench-hud" aria-hidden="true">
+            {showDemo ? <span><Icon name="play" size={15} /> Показ приёма</span> : <>
+              <span className="bench-hud-lock"><Icon name="lock" size={15} /> Фиксатор на месте</span>
+              <span className="bench-hud-open"><Icon name="unlock" size={15} /> Фиксатор отведён</span>
+              <span className="bench-hud-ready"><Icon name="check" size={15} /> Положение совпало</span>
+            </>}
+          </div>
           {showDemo ? (
             <picture className="bench-demo-visual" key={part}>
               <source media="(prefers-reduced-motion: reduce)" srcSet={asset("bench-" + part + "-still")} />
@@ -115,13 +124,13 @@ export function BenchStation({ progress, submit }: { progress: Progress; submit:
           <p className="bench-cue" id="bench-operation">
             {showDemo ? exercise.demo : <>
               <span className="bench-cue-rest">
-                {retry ? "Подвинь подушку к бирюзовой отметке и отпусти фиксатор." : <>
+                {retry ? `Подушка встала на ${benchAngles[part][notch]}°. Можно попробовать ещё раз и совместить её с бирюзовым контуром.` : <>
                   <span className="bench-touch-help">{exercise.hold}.</span>
                   <span className="bench-key-help">Удерживай пробел, чтобы отвести фиксатор.</span>
                 </>}
               </span>
               <span className="bench-cue-move">
-                <span className="bench-touch-help">{target === undefined ? "Вторым пальцем меняй наклон." : "Вторым пальцем веди подушку к бирюзовой отметке."}</span>
+                <span className="bench-touch-help">{target === undefined ? "Вторым пальцем меняй наклон." : "Вторым пальцем совмести подушку с бирюзовым контуром."}</span>
                 <span className="bench-key-help">Меняй наклон мышью или стрелками.</span>
               </span>
               <span className="bench-cue-snap">

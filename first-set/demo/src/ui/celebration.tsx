@@ -13,22 +13,35 @@ export function CheckBurst({ label, className = "" }: { label?: string; classNam
   );
 }
 
-const confettiColors = ["var(--accent)", "var(--aqua)", "var(--ink)", "#fff", "#f5ac4f"];
+export function ShiftMedal() {
+  return <div className="finish-medal" aria-hidden="true">
+    <span><Icon name="check" size={42} /></span>
+  </div>;
+}
+
+const confettiColors = ["#ff782c", "#06b8c4", "#087c87", "#ffc267", "#75e1e4"];
 
 export function Confetti() {
   return (
     <div className="finish-confetti" aria-hidden="true">
-      {Array.from({ length: 54 }, (_, index) => (
-        <i key={index} className="confetti-piece" style={{
-          left: (index * 41 % 103) + "%",
-          backgroundColor: confettiColors[index % confettiColors.length],
-          "--spin": (index % 2 ? -1 : 1) * (170 + index % 9 * 57) + "deg",
-          "--drift": (index * 23 % 109 - 54) + "px",
-          "--delay": index * 47 % 510 + "ms",
-          "--time": 1650 + index * 61 % 980 + "ms",
-          "--size": 5 + index % 6 + "px",
-        } as CSSProperties} />
-      ))}
+      {Array.from({ length: 60 }, (_, index) => {
+        const right = index % 2 === 0;
+        const phase = index * 23 % 61;
+        const near = index % 4 === 0;
+        return <i key={index} className="confetti-piece" data-shape={index % 3 === 0 ? "pearl" : "ribbon"}
+          data-near={near || undefined} style={{
+            left: (right ? 82 : 18) + "%",
+            "--pigment": confettiColors[index % confettiColors.length],
+            "--lift": -(62 + phase * 1.8) + "px",
+            "--drift": (right ? -1 : 1) * (phase - 13) + "cqw",
+            "--spin": (right ? -1 : 1) * (160 + index % 9 * 46) + "deg",
+            "--turn": 230 + phase * 5 + "deg",
+            "--delay": index * 29 % 290 + "ms",
+            "--time": 1500 + index * 61 % 980 + "ms",
+            "--size": (near ? 8 : 4) + index % 3 + "px",
+            "--depth": near ? "38px" : "-28px",
+          } as CSSProperties} />;
+      })}
     </div>
   );
 }

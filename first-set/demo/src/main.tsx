@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { newProgress, nextStation, start, stationProgress, submit, type Action } from "./engine/game";
-import { stationDetails, stations, stationTotal } from "./engine/scenario";
+import { stations, stationTotal } from "./engine/scenario";
 import { BenchStation } from "./ui/bench";
 import { Icon } from "./ui/graphics";
 import { BarbellScene, DumbbellScene, InventoryScene } from "./ui/gym";
-import { Briefing, Finish, Route, SceneResult, Skip, TrainingInfo, type Training } from "./ui/screens";
+import { Briefing, Finish, Route, SceneResult, ShiftCover, Skip, TrainingInfo, type Training } from "./ui/screens";
 import { ClubAction, ClubCalendar, ClubHeader, ClubNavigation, Home, type ClubTab } from "./ui/home";
 import { SceneButton } from "./ui/scene-button";
 import "./style.css";
 
-type EntryView = ClubTab | "briefing" | "route" | "play" | "skip";
+type EntryView = ClubTab | "cover" | "briefing" | "route" | "play" | "skip";
 type View = EntryView | "training";
 
 function App() {
@@ -60,7 +60,7 @@ function App() {
 
   function begin(from: ClubTab) {
     setEntryTab(from);
-    setView("briefing");
+    setView("cover");
   }
 
   function closeApproach() {
@@ -91,8 +91,8 @@ function App() {
 
   return (
     <div className="phone-preview" ref={preview}>
-      <div className={"app" + (clubTab ? " app-club" : "") + (complete ? " app-finish" : "")} ref={screen}>
-        {clubTab ? <ClubHeader home={home} /> : stageHeader ? (
+      <div className={"app" + (clubTab ? " app-club" : "") + (complete ? " app-finish" : "")} data-view={view} ref={screen}>
+        {clubTab ? <ClubHeader home={home} /> : view === "briefing" ? null : stageHeader ? (
           <header className="scene-header shell" inert={sceneResult}>
             <SceneButton type="button" className="button quiet scene-route" onActivate={() => setView("route")} disabled={lesson}>
               <Icon name="back" size={17} /> Маршрут
@@ -111,7 +111,7 @@ function App() {
               <SceneButton type="button" className="wordmark" onActivate={home} aria-label="Первый подход — главная">
                 <strong>DDX</strong><span>FITNESS</span>
               </SceneButton>
-              {(view === "route" || view === "briefing") &&
+              {(view === "route" || view === "cover") &&
                 <SceneButton type="button" className="button quiet scene-close" onActivate={closeApproach} aria-label="Выйти"><Icon name="close" size={22} /></SceneButton>}
               {view === "skip" &&
                 <SceneButton type="button" className="button quiet training-link" onActivate={() => openTraining("smart-start")}>Smart Start <Icon name="external" size={17} /></SceneButton>}
@@ -123,7 +123,8 @@ function App() {
           {view === "home" && <Home heading={heading} begin={() => begin("home")} training={openTraining} calendar={() => setView("calendar")} />}
           {view === "calendar" && <ClubCalendar heading={heading} training={openTraining} approach={() => begin("calendar")} />}
           {view === "action" && <ClubAction heading={heading} begin={() => begin("action")} training={openTraining} />}
-          {view === "briefing" && <Briefing heading={heading} next={() => setView("route")} skip={() => setView("skip")} />}
+          {view === "cover" && <ShiftCover heading={heading} begin={() => setView("briefing")} skip={() => setView("skip")} />}
+          {view === "briefing" && <Briefing heading={heading} next={() => setView("route")} back={() => setView("cover")} />}
           {view === "route" && <Route heading={heading} progress={session} begin={enterStation} />}
           {view === "skip" && <Skip heading={heading} back={home} training={() => openTraining("smart-start")} />}
           {view === "training" && <TrainingInfo heading={heading} active={training.target} back={() => setView(training.from)} />}
@@ -136,10 +137,10 @@ function App() {
                   <div className="game-heading">
                     <h1 ref={sceneResult ? undefined : heading} tabIndex={-1}>{station.title}</h1>
                     {station.stage !== "BARBELL" && <p className="stage-score" aria-label={"Выполнено " + stationProgress(session, station) + " из " + stationTotal(station)}>
+                      <Icon name="check" size={15} />
                       <strong>{stationProgress(session, station)}</strong><span> / {stationTotal(station)}{station.stage === "DUMBBELLS" ? " пар" : ""}</span>
                     </p>}
                   </div>
-                  <p className="game-instruction">{stationDetails[station.stage].instruction}</p>
                 </div>
                 {station.stage === "DUMBBELLS" && <DumbbellScene station={station} progress={session} submit={action} />}
                 {station.stage === "BARBELL" && <BarbellScene progress={session} submit={action} />}

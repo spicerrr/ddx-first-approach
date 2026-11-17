@@ -138,7 +138,7 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
     } else {
       const pocket = rackTargets.find(({ id }) => id === target.id);
       if (pocket?.weightKg !== item.weightKg) {
-        return reject("Эта пара сюда не подходит. Сравни веса соседних гантелей.");
+        return reject("Посмотри на соседние пары. Куда подойдёт этот вес, если ряд идёт от лёгких гантелей к тяжёлым?");
       }
       assigned[item.id] = target.id;
     }
@@ -147,7 +147,7 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
     const expected = inventoryDestination(item);
     if (target?.id !== expected) {
       const label = station.targets.find(({ id }) => id === expected)?.label;
-      return reject(label ? `Для этого предмета подходит «${label}».` : "Зона для этого предмета недоступна.");
+      return reject(label ? `Посмотри на зону «${label}». Там следующий человек будет искать этот инвентарь.` : "Давай найдём подходящую зону хранения.");
     }
     assigned[item.id] = action.destination;
   }
