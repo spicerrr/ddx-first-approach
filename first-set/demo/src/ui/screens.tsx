@@ -1,10 +1,10 @@
 import type { Ref } from "react";
 import { lastStation, stationDetails, stations, type StationId } from "../engine/scenario";
-import type { Phase, Progress } from "../engine/game";
-import type { Training } from "../engine/store";
-import { asset, Equipment, Icon, type ArtName, type IconName } from "./graphics";
+import type { Progress } from "../engine/game";
+import { Equipment, Icon, sceneAsset, type ArtName, type IconName } from "./graphics";
 
 type Heading = Ref<HTMLHeadingElement>;
+export type Training = "smart-start" | "intro";
 
 export const stationIcons: Record<StationId, IconName> = {
   DUMBBELLS: "gym",
@@ -20,33 +20,35 @@ const stationArt: Record<StationId, ArtName> = {
   INVENTORY: "mat",
 };
 
-export function Home({ heading, phase, lessonIndex, begin, skip, restart }: {
-  heading: Heading;
-  phase: Phase;
-  lessonIndex: number;
-  begin: () => void;
-  skip: () => void;
-  restart: () => void;
-}) {
-  const hasResult = phase === "complete" || phase === "lesson" && lessonIndex === lastStation;
+export function Home({ heading, begin, skip }: { heading: Heading; begin: () => void; skip: () => void }) {
   return (
     <section className="welcome">
-      <p className="home-label">Главная</p>
       <article className="onboarding-card">
         <figure className="welcome-image">
-          <img src={asset("rack-mobile")} width={1024} height={1360} alt="" fetchPriority="high" />
+          <img src={sceneAsset("coach")} width={540} height={810} alt="" fetchPriority="high" />
         </figure>
         <div className="welcome-copy">
-          <h1 ref={heading} tabIndex={-1} id="welcome-title">Первый подход</h1>
-          <p className="intro-text">Пройди четыре станции и подготовься к первому визиту в зал.</p>
-          <button type="button" className="button primary" onClick={begin}>
-            {hasResult ? "Открыть результат" : phase === "ready" ? "Начать знакомство" : "Продолжить"} <Icon name="arrow" />
-          </button>
+          <h1 ref={heading} tabIndex={-1}>Первый подход</h1>
+          <p className="intro-text">Знакомство с залом перед первой тренировкой.</p>
+          <button type="button" className="button primary" onClick={begin}>Начать знакомство <Icon name="arrow" /></button>
         </div>
       </article>
       <div className="welcome-actions">
-        {phase !== "ready" && <button type="button" className="button quiet" onClick={restart}>Начать заново</button>}
         <button type="button" className="button quiet" onClick={skip}>Пропустить</button>
+      </div>
+    </section>
+  );
+}
+
+export function Briefing({ heading, next }: { heading: Heading; next: () => void }) {
+  return (
+    <section className="coach-brief">
+      <img className="coach-photo" src={sceneAsset("coach")} alt="" width={540} height={810} />
+      <div className="coach-dialogue">
+        <p className="coach-label">Тренер клуба</p>
+        <h1 ref={heading} tabIndex={-1}>Привет!</h1>
+        <p>Давай пройдёмся по залу. Я покажу, где оставить инвентарь и как разобраться со скамьёй перед подходом.</p>
+        <button type="button" className="button primary" onClick={next}>К маршруту <Icon name="arrow" /></button>
       </div>
     </section>
   );
@@ -56,7 +58,7 @@ export function Route({ heading, progress, begin }: { heading: Heading; progress
   return (
     <section className="route">
       <h1 ref={heading} tabIndex={-1}>Твой маршрут</h1>
-      <p className="intro-text">Четыре ситуации перед первым подходом в зале.</p>
+      <p className="intro-text">Четыре задания перед первой тренировкой.</p>
       <ol className="route-stations">
         {stations.map(({ stage }, index) => {
           const completed = index < progress.stageIndex;
@@ -66,7 +68,9 @@ export function Route({ heading, progress, begin }: { heading: Heading; progress
             <div><strong>{stationDetails[stage].name}</strong>
               <span>{completed ? "Пройдено" : current ? "Можно начать" : "После предыдущей станции"}</span>
             </div>
-            <Equipment name={stationArt[stage]} />
+            {stage === "DUMBBELLS" || stage === "BARBELL"
+              ? <img className="equipment route-prop" src={sceneAsset(stage === "DUMBBELLS" ? "dumbbell-12" : "disk-10")} alt="" />
+              : <Equipment name={stationArt[stage]} />}
           </li>;
         })}
       </ol>
@@ -99,21 +103,35 @@ export function Lesson({ heading, index, next }: { heading: Heading; index: numb
   );
 }
 
-export function Finish({ heading, training, restart }: {
+export function SceneResult({ heading, stage, next }: { heading: Heading; stage: StationId; next: () => void }) {
+  const detail = stationDetails[stage];
+  return (
+    <div className="scene-result" role="dialog" aria-modal="true" aria-labelledby="scene-result-title">
+      <section className="scene-result-card">
+        <span className="success-symbol"><Icon name="check" size={29} /></span>
+        <h1 id="scene-result-title" tabIndex={-1} ref={heading}>{detail.lessonTitle}</h1>
+        <p>{detail.lesson}</p>
+        <button type="button" className="button primary" onClick={next}>{stage === "INVENTORY" ? "К результату" : "Следующая станция"} <Icon name="arrow" /></button>
+      </section>
+    </div>
+  );
+}
+
+export function Finish({ heading, training, home }: {
   heading: Heading;
   training: (target: Training) => void;
-  restart: () => void;
+  home: () => void;
 }) {
   return (
     <section className="finish">
       <div>
-        <p className="accent-label"><Icon name="check" size={18} /> Четыре станции пройдены</p>
+        <span className="success-symbol finish-symbol"><Icon name="check" size={32} /></span>
         <h1 ref={heading} tabIndex={-1}>Первый подход<br /><span>завершён</span></h1>
         <p className="intro-text">В зале можно продолжить знакомство с оборудованием вместе с тренером.</p>
         <div className="finish-actions">
           <button type="button" className="button primary" onClick={() => training("smart-start")}>Smart Start <Icon name="arrow" /></button>
           <button type="button" className="button secondary" onClick={() => training("intro")}>Ознакомительная тренировка <Icon name="arrow" /></button>
-          <button type="button" className="button quiet" onClick={restart}>Пройти ещё раз</button>
+          <button type="button" className="button quiet" onClick={home}>На главный экран</button>
         </div>
       </div>
       <ul className="recap" aria-label="Памятка после прохождения">

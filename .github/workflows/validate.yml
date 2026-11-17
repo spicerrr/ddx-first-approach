@@ -22,7 +22,7 @@ jobs:
         run: python first-set/sa/scripts/verify_docs.py
       - name: Install demo dependencies
         run: npm ci --prefix first-set/demo
-      - name: Verify game rules and persistence
+      - name: Verify game rules
         run: npm test --prefix first-set/demo
       - name: Verify types and production build
         run: npm run build --prefix first-set/demo

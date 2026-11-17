@@ -1,7 +1,11 @@
-import type { Item, PlacementStation } from "../engine/scenario";
+import type { Item } from "../engine/scenario";
 
 export function asset(file: string) {
   return `${import.meta.env.BASE_URL}art/${file}.webp`;
+}
+
+export function sceneAsset(file: string) {
+  return `${import.meta.env.BASE_URL}art/${file}.png`;
 }
 
 const iconPaths = {
@@ -34,11 +38,6 @@ export function Equipment({ name, className = "", alt = "" }: { name: ArtName; c
   return <img className={`equipment ${className}`} src={asset(name)} alt={alt} decoding="async" draggable={false} />;
 }
 
-export function ItemArt({ station, item }: { station: PlacementStation; item: Item }) {
-  const name = station === "DUMBBELLS" ? "dumbbells" : station === "BARBELL" ? "plate" : inventoryArt[item.id.split("_")[0]];
-  const weight = item.weightKg ?? item.id.split("_")[1];
-  if (station === "DUMBBELLS") {
-    return <span className="single-dumbbell"><Equipment name="dumbbells" className={`mass-${weight}`} /></span>;
-  }
-  return <Equipment name={name} className={station === "INVENTORY" ? "" : `mass-${weight}`} />;
+export function inventoryAsset(item: Item) {
+  return asset(inventoryArt[item.id.split("_")[0]]);
 }

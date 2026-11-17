@@ -1,28 +1,22 @@
 import { expect, type Page } from "@playwright/test";
 
 export const button = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
+export const prop = (page: Page, id: string) => page.locator('[data-scene-item="' + id + '"]');
+export const dropTarget = (page: Page, id: string) => page.locator('[data-scene-target="' + id + '"]');
 
 export const placements = {
   dumbbells: [
-    ["Гантель Б · 8 кг", "Ячейка 8 кг"],
-    ["Гантель А · 12 кг", "Ячейка 12 кг"],
-    ["Гантель Б · 12 кг", "Ячейка 12 кг"],
-    ["Гантель А · 16 кг", "Ячейка 16 кг"],
-    ["Гантель Б · 16 кг", "Ячейка 16 кг"],
+    ["DB_8_A", "RACK_LEFT"], ["DB_8_B", "RACK_LEFT"],
+    ["DB_12_A", "RACK_MIDDLE"], ["DB_12_B", "RACK_MIDDLE"],
+    ["DB_16_A", "RACK_RIGHT"], ["DB_16_B", "RACK_RIGHT"],
   ],
   barbell: [
-    ["Диск В · 10 кг", "Левая сторона"],
-    ["Диск Г · 10 кг", "Правая сторона"],
+    ["DISK_10_A", "LEFT"], ["DISK_10_B", "RIGHT"],
+    ["LOCK_A", "LEFT"], ["LOCK_B", "RIGHT"],
   ],
   inventory: [
-    ["Коврик 01", "Стойка ковриков"],
-    ["Резинка 01", "Зона резинок"],
-    ["Йога-блок 01", "Йога-блоки"],
-    ["МФР-ролл 01", "МФР-роллы"],
-    ["Коврик 02", "Стойка ковриков"],
-    ["Резинка 02", "Зона резинок"],
-    ["Йога-блок 02", "Йога-блоки"],
-    ["МФР-ролл 02", "МФР-роллы"],
+    ["MAT_1", "MATS"], ["BAND_1", "BANDS"], ["BLOCK_1", "BLOCKS"], ["ROLLER_1", "ROLLERS"],
+    ["MAT_2", "MATS"], ["BAND_2", "BANDS"], ["BLOCK_2", "BLOCKS"], ["ROLLER_2", "ROLLERS"],
   ],
 } as const;
 
@@ -32,9 +26,49 @@ export async function activate(page: Page, name: string, touch = false) {
   else await control.click();
 }
 
-export async function put(page: Page, [item, target]: readonly [string, string], touch = false) {
-  await activate(page, item, touch);
-  await activate(page, target, touch);
+export async function begin(page: Page, touch = false) {
+  for (const name of ["Начать знакомство", "К маршруту", "Начать маршрут"]) await activate(page, name, touch);
+}
+
+export async function keyboardPlace(page: Page, [item, target]: readonly [string, string]) {
+  await prop(page, item).press("Space");
+  await dropTarget(page, target).press("Space");
+}
+
+export async function dragProp(page: Page, [item, target]: readonly [string, string], touch = false) {
+  const source = prop(page, item);
+  const receiver = dropTarget(page, target);
+  await source.scrollIntoViewIfNeeded();
+  await receiver.scrollIntoViewIfNeeded();
+  const from = await source.evaluate((node) => {
+    const box = node.getBoundingClientRect();
+    for (const py of [.5, .42, .56, .66, .34, .22, .78]) {
+      for (const px of [.5, .64, .35, .79, .23]) {
+        const x = box.left + box.width * px, y = box.top + box.height * py;
+        if (document.elementFromPoint(x, y)?.closest("[data-scene-item]") === node) return { x, y };
+      }
+    }
+    return null;
+  });
+  expect(from, item + " можно взять со сцены").not.toBeNull();
+  const rect = (await receiver.boundingBox())!;
+  const to = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  if (touch) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [from!] });
+    for (let step = 1; step <= 6; step++) {
+      const x = from!.x + (to.x - from!.x) * step / 6;
+      const y = from!.y + (to.y - from!.y) * step / 6;
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y }] });
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await cdp.detach();
+  } else {
+    await page.mouse.move(from!.x, from!.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 6 });
+    await page.mouse.up();
+  }
 }
 
 export async function noOverflow(page: Page) {

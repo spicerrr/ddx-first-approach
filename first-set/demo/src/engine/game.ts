@@ -1,6 +1,6 @@
-import { checkBarbell } from "./barbell";
-import { benchFinalCheck, benchParts, lastStation, placementDestination, stations, stationTotal,
-  type BenchPart, type PlacementStation, type Station, type StationId } from "./scenario";
+import { checkBarbell, moveBarbell, newAssembly, type BarbellAssembly, type BarbellDestination } from "./barbell";
+import { benchFinalCheck, benchParts, floorId, inventoryDestination, lastStation, stations, stationTotal,
+  type BenchPart, type Station, type StationId } from "./scenario";
 
 export type Phase = "ready" | "playing" | "lesson" | "complete";
 export type GameEvent =
@@ -10,15 +10,16 @@ export type GameEvent =
 export type Progress = {
   phase: Phase;
   stageIndex: number;
-  placements: Record<PlacementStation, Record<string, string>>;
+  placements: Record<"DUMBBELLS" | "INVENTORY", Record<string, string>>;
+  barbell: BarbellAssembly;
   benchChecks: string[];
   benchAdjustments: BenchPart[];
   events: GameEvent[];
 };
 
 export type Action =
-  | { kind: "place"; stage: PlacementStation; item: string; destination: string }
-  | { kind: "remove-disk"; item: string }
+  | { kind: "place"; stage: "DUMBBELLS" | "INVENTORY"; item: string; destination: string }
+  | { kind: "move-barbell"; item: string; destination: BarbellDestination }
   | { kind: "check-barbell" }
   | { kind: "bench"; check: string }
   | { kind: "bench-adjustment"; part: BenchPart };
@@ -33,7 +34,8 @@ export function newProgress(): Progress {
   return {
     phase: "ready",
     stageIndex: 0,
-    placements: { DUMBBELLS: {}, BARBELL: {}, INVENTORY: {} },
+    placements: { DUMBBELLS: {}, INVENTORY: {} },
+    barbell: newAssembly(),
     benchChecks: [],
     benchAdjustments: [],
     events: [],
@@ -50,7 +52,11 @@ export function stationProgress(progress: Progress, station: Station) {
   if (station.stage === "BARBELL") {
     return Number(progress.events.some((event) => event.type === "game_stage_completed" && event.stage === "BARBELL"));
   }
-  return Object.keys(progress.placements[station.stage]).length;
+  const placements = Object.values(progress.placements[station.stage]);
+  if (station.stage === "DUMBBELLS") {
+    return station.targets.filter(({ id }) => placements.filter((target) => target === id).length === 2).length;
+  }
+  return placements.length;
 }
 
 export function benchTask(progress: Progress, station: Station) {
@@ -83,16 +89,14 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
   const station = stations[progress.stageIndex];
   if (action.kind === "check-barbell") {
     if (station.stage !== "BARBELL") return reject("Выбери действие текущей станции.");
-    const result = checkBarbell(progress.placements.BARBELL);
+    const result = checkBarbell(progress.barbell);
     return result.accepted ? accept(finishStation(progress, "BARBELL", at), result.message) : reject(result.message);
   }
 
-  if (action.kind === "remove-disk") {
+  if (action.kind === "move-barbell") {
     if (station.stage !== "BARBELL") return reject("Выбери действие текущей станции.");
-    const disks = { ...progress.placements.BARBELL };
-    if (!Object.hasOwn(disks, action.item)) return reject("Выбери установленный диск.");
-    delete disks[action.item];
-    return accept({ ...progress, placements: { ...progress.placements, BARBELL: disks } }, "Диск возвращён в лоток.");
+    const result = moveBarbell(progress.barbell, action.item, action.destination);
+    return result.accepted ? accept({ ...progress, barbell: result.assembly }, result.message) : reject(result.message);
   }
 
   let updated: Progress;
@@ -121,22 +125,42 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
 
     const item = station.items.find(({ id }) => id === action.item);
     const target = station.targets.find(({ id }) => id === action.destination);
-    if (!item || !target) return reject("Выбери предмет и место для него.");
+    if (!item || (!target && !(action.stage === "DUMBBELLS" && action.destination === floorId))) {
+      return reject("Выбери предмет и место для него.");
+    }
 
     const placements = progress.placements[action.stage];
-    if (action.stage === "BARBELL") {
-      if (placements[item.id] === target.id) return reject("Диск уже на этой стороне.");
+    const assigned = { ...placements };
+    if (placements[item.id] === action.destination) return reject("");
+    if (action.stage === "DUMBBELLS") {
+      if (!target) {
+        if (!Object.hasOwn(placements, item.id)) return reject("");
+        delete assigned[item.id];
+        message = "";
+      } else {
+        const beside = station.items.filter((other) => placements[other.id] === target.id);
+        if (beside.length === 2) return reject("Здесь уже стоит пара. Попробуй соседние места.");
+        if (beside.length && beside[0].weightKg !== item.weightKg) {
+          return reject(`Здесь стоит гантель ${beside[0].weightKg} кг. Найди вторую с такой же цифрой.`);
+        }
+        const matching = station.items.find((other) => other.id !== item.id && other.weightKg === item.weightKg);
+        if (matching && placements[matching.id] && placements[matching.id] !== target.id) {
+          return reject("Вторая гантель этого веса уже на стойке. Поставь их рядом.");
+        }
+        assigned[item.id] = target.id;
+        message = beside.length ? "Пара на месте." : "";
+      }
     } else {
       if (Object.hasOwn(placements, item.id)) return reject("Этот предмет уже на месте.");
-      const expected = placementDestination(action.stage, item);
-      if (expected !== target.id) {
+      const expected = inventoryDestination(item);
+      if (target?.id !== expected) {
         const label = station.targets.find(({ id }) => id === expected)?.label;
         return reject(label ? `Для этого предмета подходит «${label}».` : "Зона для этого предмета недоступна.");
       }
+      assigned[item.id] = action.destination;
+      message = "На месте.";
     }
-
-    updated = { ...progress, placements: { ...progress.placements, [action.stage]: { ...placements, [item.id]: target.id } } };
-    message = action.stage === "BARBELL" ? "Штанга обновлена." : "На месте.";
+    updated = { ...progress, placements: { ...progress.placements, [action.stage]: assigned } };
   }
 
   if (station.stage !== "BARBELL" && stationProgress(updated, station) === stationTotal(station)) {
