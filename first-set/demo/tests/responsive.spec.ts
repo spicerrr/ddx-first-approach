@@ -10,7 +10,7 @@ for (const width of [320, 375, 402, 430, 768, 1440]) {
     if (width >= 520) {
       expect(await page.locator(".app").evaluate((el) => [el.clientWidth, el.clientHeight])).toEqual([402, 874]);
       const bounds = (await page.locator(".app").boundingBox())!;
-      expect(bounds.width / bounds.height).toBeCloseTo(416 / 888, 2);
+      expect(bounds.width / bounds.height).toBeCloseTo(402 / 874, 2);
     }
     await begin(page);
     for (const [index, name] of ["dumbbells", "barbell", "bench", "inventory"].entries()) {

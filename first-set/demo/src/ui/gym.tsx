@@ -143,6 +143,7 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
           data-keyboard={keyboard?.id === prop.id ? true : undefined}
           data-landed={landed.includes(prop.id) || undefined}
           data-coaxial={Boolean(prop.mounted) || undefined}
+          data-clamp={Boolean(prop.mounted?.clamp) || undefined}
           style={{
             left: prop.x + "%", top: prop.y + "%", width: prop.mounted ? prop.size + "%" : "max(44px, " + prop.size + "%)",
             "--prop-x": -(prop.anchor?.[0] ?? 50) + "%", "--prop-y": -(prop.anchor?.[1] ?? 50) + "%",
@@ -374,7 +375,7 @@ export function BarbellScene({ progress, submit }: Props) {
           return (
             <SceneButton key={side} type="button" className="barbell-latch-action" aria-pressed={closed}
               aria-label={(closed ? "Открыть " : "Защёлкнуть ") + sideLabel + " замок"}
-              style={{ left: x + "%", top: (y - 7) + "%" }} onActivate={() => {
+              style={{ left: x + "%", top: (y - 12.5) + "%" }} onActivate={() => {
                 const result = submit({ kind: "toggle-collar", side });
                 if (result.accepted) setFeedback(null);
               }}>

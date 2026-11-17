@@ -395,6 +395,10 @@ h1:focus { outline: 0; }
 .scene-prop[data-held] { opacity: .2; cursor: grabbing; }
 .scene-prop[data-stationary] { pointer-events: none; }
 .scene-prop:focus-visible, .scene-prop[data-keyboard] { outline: 2px solid var(--aqua); outline-offset: 3px; border-radius: 6px; }
+.scene-prop[data-clamp]::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px;
+  transform: translate(-50%, -50%);
+}
 
 .scene-prop:not([data-coaxial])[data-landed] img { animation: settle-prop .22s ease-out; }
 .scene-prop[data-coaxial] .mounted-art { display: block; width: 100%; pointer-events: none; filter: none; }
@@ -414,7 +418,11 @@ h1:focus { outline: 0; }
 .barbell-latch-action {
   position: absolute; z-index: 180; width: 44px; height: 44px;
   display: grid; place-items: center; transform: translate(-50%, -50%);
-  padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink);
+  padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink); touch-action: none;
+}
+.barbell-latch-action::after {
+  content: ""; position: absolute; top: calc(50% + 13px); left: calc(50% - .5px); width: 1px; height: 12px;
+  background: var(--muted); pointer-events: none;
 }
 .barbell-latch-action span {
   display: grid; place-items: center; width: 23px; height: 23px;
@@ -632,15 +640,22 @@ h1:focus { outline: 0; }
 
 @media (min-width: 520px) {
   #root { padding-block: 16px; }
-  .app {
+  .phone-preview {
     width: 416px;
     height: 888px;
     zoom: var(--phone-scale, 1);
-    min-height: 0;
-    overflow: auto;
-    border: 7px solid var(--ink);
+    margin-inline: auto;
+    padding: 7px;
+    background: var(--ink);
     border-radius: 34px;
     box-shadow: 0 14px 38px var(--shadow);
+  }
+  .app {
+    width: 402px;
+    height: 874px;
+    min-height: 0;
+    overflow: auto;
+    border-radius: 27px;
     scrollbar-width: none;
   }
   .app::-webkit-scrollbar { display: none; }
