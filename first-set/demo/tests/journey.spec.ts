@@ -9,34 +9,6 @@ async function capture(page: Page, info: TestInfo, name: string) {
   await page.screenshot({ path: info.outputPath(name + ".png"), fullPage: true, animations: "disabled" });
 }
 
-
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    const entries: unknown[] = [];
-    Object.defineProperty(window, "__touchTrace", { value: entries });
-    for (const name of ["pointerdown", "pointerup", "pointercancel", "touchstart", "touchend", "touchcancel", "click"]) {
-      document.addEventListener(name, (e) => {
-        const t = e.target;
-        const h = document.querySelector("h1")?.textContent?.slice(0,45);
-        if (!(t instanceof Element)) return;
-        const control = t.closest("button,[data-scene-item]");
-        const p = e instanceof PointerEvent ? e : e instanceof TouchEvent ? e.changedTouches[0] : e instanceof MouseEvent ? e : undefined;
-        entries.push([Math.round(performance.now()), e.type, h, control?.getAttribute("data-scene-item") ?? control?.getAttribute("aria-label") ?? control?.textContent?.trim() ?? t.tagName, p && [Math.round(p.clientX), Math.round(p.clientY)], e instanceof PointerEvent ? [e.pointerType, e.isPrimary] : null, scrollY, window.visualViewport?.scale]);
-        if (entries.length > 56) entries.shift();
-      }, { capture: true });
-    }
-  });
-});
-test.afterEach(async ({ page }, info) => {
-  if (info.status === info.expectedStatus || page.isClosed()) return;
-  const result = await page.evaluate(() => ({
-    text: document.querySelector("main")?.innerText?.slice(0,360),
-    viewport: [innerWidth, innerHeight, scrollY, window.visualViewport?.scale],
-    trace: (window as Window & { __touchTrace?: unknown[] }).__touchTrace,
-  })).catch((error) => String(error));
-  console.log("TOUCH-DIAGNOSTIC " + JSON.stringify(result));
-});
-
 test("четыре станции, перетаскивание снарядов и замки", async ({ page, isMobile }, info) => {
   test.setTimeout(65_000);
   const problems: string[] = [];
@@ -163,7 +135,6 @@ test("четыре станции, перетаскивание снарядов
 });
 
 test("выход и перезагрузка открывают чистый маршрут", async ({ page, isMobile }) => {
-  test.setTimeout(13000);
   await page.goto("");
   await page.evaluate((key) => localStorage.setItem(key, '{"previous":"cycle"}'), oldStorageKey);
   await begin(page, isMobile);
