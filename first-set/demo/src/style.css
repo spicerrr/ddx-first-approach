@@ -674,6 +674,7 @@ h1:focus { outline: 0; }
 .app-finish { background: linear-gradient(#ddf7f4, var(--background) 51%); }
 .finish > div:not(.finish-confetti) { text-align: center; }
 .finish .finish-actions { margin: 16px auto 0; }
+.finish-actions .quiet { justify-content: center; }
 .finish-medal {
   position: relative; width: 109px; height: 109px; margin: 4px auto 19px; display: grid; place-items: center; border-radius: 50%;
   background: radial-gradient(circle at 37% 21%, #e9fffc, #8fdfdd 51%, #369ba0 76%, #8bd8d9);

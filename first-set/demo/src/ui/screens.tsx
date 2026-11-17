@@ -19,7 +19,7 @@ export function ShiftCover({ heading, begin, skip }: { heading: Heading; begin: 
   return (
     <section className="shift-cover">
       <div className="shift-cover-hero">
-        <img src={asset("coach-avatar")} alt="" width={640} height={800} fetchPriority="high" />
+        <img src={asset("coach-avatar-ddx")} alt="" width={640} height={800} fetchPriority="high" />
         <div className="shift-cover-copy">
           <p>Твоя первая смена</p>
           <h1 ref={heading} tabIndex={-1}>Первый<br />подход</h1>
@@ -38,7 +38,7 @@ export function Route({ heading, progress, begin }: { heading: Heading; progress
   return (
     <section className="route">
       <h1 ref={heading} tabIndex={-1}>Твоя смена</h1>
-      <p className="intro-text">{progress.phase === "ready" ? "Четыре дела в зале. Начни со стойки гантелей." : "Здесь видно, что уже готово и какие дела остались."}</p>
+      <p className="intro-text">{progress.phase === "ready" ? "Для начала заглянем к стойке с гантелями." : "Можно вернуться к тому месту, где мы остановились."}</p>
       <ol className="route-stations">
         {stations.map(({ stage }, index) => {
           const completed = index < progress.stageIndex;

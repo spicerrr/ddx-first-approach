@@ -43,7 +43,7 @@ test("четыре станции, перетаскивание снарядов
   await expect(page.getByRole("heading", { name: "Smart Start", exact: true })).toBeVisible();
   await press("Назад");
   await press("Начать знакомство");
-  await expect(page.locator(".shift-cover img")).toHaveAttribute("src", /coach-avatar\.webp$/);
+  await expect(page.locator(".shift-cover img")).toHaveAttribute("src", /coach-avatar-ddx\.webp$/);
   await capture(page, info, "01a-cover");
   await press("Начать");
   await expect(page.getByRole("heading", { name: "Твоя смена" })).toBeVisible();
@@ -51,6 +51,7 @@ test("четыре станции, перетаскивание снарядов
   await capture(page, info, "02a-route");
   await press("Начать смену");
   await expect(itemsOnFloor).toHaveCount(6);
+  await expect(page.locator(".coach-avatar img").first()).toHaveAttribute("src", /coach-avatar-ddx\.webp$/);
   await expect(page.locator('.rack-pair[data-shelf="1"]')).toHaveCount(4);
   await expect(page.locator('.rack-pair[data-shelf="2"]')).toHaveCount(4);
   await expect(page.locator(".gym-floor .scene-backdrop")).toHaveAttribute("src", /rack-studio\.webp$/);
@@ -88,6 +89,13 @@ test("четыре станции, перетаскивание снарядов
   await expect(status).toContainText("Замки ставим в конце");
   await expect(button(page, "Защёлкнуть левый замок")).toHaveCount(0);
   await move(["DISK_20_A", "LEFT"]);
+  if (isMobile) {
+    await move(["DISK_5_A", "LEFT"]);
+    await expect(weight(page)).toHaveText("45 кг");
+    await move(["DISK_20_A", "FLOOR"]);
+    await expect(prop(page, "DISK_5_A")).toHaveAttribute("data-location", "FLOOR");
+    await expect(prop(page, "DISK_20_A")).toHaveAttribute("data-location", "LEFT");
+  }
   await press("Сбросить штангу");
   await expect(weight(page)).toHaveText("20 кг");
   await expect(prop(page, "DISK_20_A")).toHaveAttribute("data-location", "FLOOR");
