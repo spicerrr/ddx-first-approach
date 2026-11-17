@@ -22,7 +22,7 @@ type Prop = Point & {
   layer?: number;
   pulse?: number | number[];
   tone?: "coral" | "aqua";
-  mounted?: { slide: Point; clamp?: { ratio: number; closed: boolean } };
+  mounted?: { slide: Point; clamp?: { ratio: number; height: number; closed: boolean } };
   dragSrc?: string;
 };
 type Target = Point & { id: string; label: string; width: number; height: number };
@@ -145,12 +145,15 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
           data-coaxial={Boolean(prop.mounted) || undefined}
           data-clamp={Boolean(prop.mounted?.clamp) || undefined}
           style={{
-            left: prop.x + "%", top: prop.y + "%", width: prop.mounted ? prop.size + "%" : "max(44px, " + prop.size + "%)",
+            left: (prop.x - (prop.mounted?.clamp ? prop.size * (prop.anchor?.[0] ?? 50) / 100 : 0)) + "%",
+            top: (prop.y - (prop.mounted?.clamp ? prop.mounted.clamp.height * (prop.anchor?.[1] ?? 50) / 100 : 0)) + "%",
+            width: prop.mounted ? prop.size + "%" : "max(44px, " + prop.size + "%)",
             "--prop-x": -(prop.anchor?.[0] ?? 50) + "%", "--prop-y": -(prop.anchor?.[1] ?? 50) + "%",
             "--prop-angle": (prop.angle ?? 0) + "deg",
             "--slide-x": (prop.mounted?.slide.x ?? 0) + "%",
             "--slide-y": (prop.mounted?.slide.y ?? 0) + "%",
-            zIndex: prop.layer ?? 3,
+            "--clamp-art-layer": prop.mounted?.clamp ? prop.layer : undefined,
+            zIndex: prop.mounted?.clamp ? undefined : prop.layer ?? 3,
           } as CSSProperties}
           onAnimationEnd={(event) => {
             if (event.animationName !== "slide-on-bar" && event.animationName !== "settle-prop") return;
@@ -341,7 +344,7 @@ export function BarbellScene({ progress, submit }: Props) {
       layer: 90 + Math.round(mount.axial * 70), size: art.width, anchor: [art.anchor[0], art.anchor[1]],
       mounted: {
         slide: { x: (end.x - position.x) / art.width * 100, y: (end.y - position.y) / art.height * 100 },
-        clamp: disk ? undefined : { ratio: art.ratio, closed: Boolean(assembly.locked[mount.side]) },
+        clamp: disk ? undefined : { ratio: art.ratio, height: art.height, closed: Boolean(assembly.locked[mount.side]) },
       },
     };
   });

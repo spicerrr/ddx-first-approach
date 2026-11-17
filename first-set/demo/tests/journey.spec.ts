@@ -105,26 +105,9 @@ test("четыре станции, перетаскивание снарядов
   await press("Проверить");
   await expect(status).toContainText("по замку");
   await move(placements.barbell[2]);
-
-  await page.evaluate(() => {
-    const log: unknown[] = [];
-    (window as Window & {motionTrace?: unknown[]}).motionTrace = log;
-    for (const name of ["pointerdown", "pointermove", "pointerup", "pointercancel", "gotpointercapture", "lostpointercapture", "touchstart", "touchend", "click", "scroll"]) {
-      document.addEventListener(name, (event) => {
-        const target = event.target;
-        const el = target instanceof HTMLElement ? target : target instanceof Element ? target.parentElement : undefined;
-        const item = el?.closest<HTMLElement>("[data-scene-item]");
-        const hit = el?.closest<HTMLElement>("button");
-        const p = event as PointerEvent;
-        log.push([name, item?.dataset.sceneItem, hit?.getAttribute("aria-label"), el?.className, p.isPrimary, p.button, p.pointerId, p.clientX, p.clientY, window.scrollY, performance.now().toFixed(0)]);
-      }, true);
-    }
-  });
   await press("Защёлкнуть левый замок");
   await expect(prop(page, "LOCK_A").locator(".clamp-sprite")).toHaveAttribute("data-closed", "true");
   await move(["LOCK_A", "FLOOR"]);
-
-  console.log("TOUCH TRACE", JSON.stringify(await page.evaluate(() => (window as Window & {motionTrace?: unknown[]}).motionTrace)));
   await expect(status).toContainText("Открой защёлку");
   await expect(weight(page)).toHaveText("80 кг");
   await press("Открыть левый замок");
