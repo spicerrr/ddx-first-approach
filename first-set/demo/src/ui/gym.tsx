@@ -6,6 +6,7 @@ import { barbell, barbellSides, floorId, rackRows, rackTargets, type BarbellSide
 import { asset, Icon, inventoryAsset, sceneAsset } from "./graphics";
 import { SceneButton } from "./scene-button";
 import barbellArt from "./barbell-art.json";
+import rackArt from "./rack-art.json";
 
 type Submit = (action: Action) => Result;
 type Props = { progress: Progress; submit: Submit };
@@ -21,7 +22,7 @@ type Prop = Point & {
   anchor?: readonly [number, number];
   layer?: number;
   pulse?: number | number[];
-  tone?: "coral" | "aqua";
+  fitted?: boolean;
   mounted?: { slide: Point; clamp?: { ratio: number; height: number; closed: boolean } };
   dragSrc?: string;
 };
@@ -35,7 +36,7 @@ type Held = {
   moved: boolean;
 };
 type Drag = Point & { prop: Prop; width: number; over?: string };
-type Feedback = { message: string; error?: boolean; target?: string };
+type Feedback = { message: string; error?: boolean; target?: string; item?: string };
 
 function InteractionField({ name, props, targets, feedback, setFeedback, onDrop, children }: {
   name: string;
@@ -63,7 +64,7 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
 
   function commit(prop: Prop, target: string) {
     const result = onDrop(prop, target);
-    setFeedback(result.message ? { message: result.message, error: !result.accepted, target } : null);
+    setFeedback(result.message ? { message: result.message, error: !result.accepted, target, item: prop.id } : null);
     if (result.accepted) {
       setLanded((ids) => ids.includes(prop.id) ? ids : [...ids, prop.id]);
       if (prop.pulse && target !== floorId && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -142,12 +143,14 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
           data-held={drag?.prop.id === prop.id ? true : undefined}
           data-keyboard={keyboard?.id === prop.id ? true : undefined}
           data-landed={landed.includes(prop.id) || undefined}
+          data-bumped={(feedback?.error && feedback.item === prop.id) || undefined}
           data-coaxial={Boolean(prop.mounted) || undefined}
+          data-fitted={prop.fitted || undefined}
           data-clamp={Boolean(prop.mounted?.clamp) || undefined}
           style={{
             left: (prop.x - (prop.mounted?.clamp ? prop.size * (prop.anchor?.[0] ?? 50) / 100 : 0)) + "%",
             top: (prop.y - (prop.mounted?.clamp ? prop.mounted.clamp.height * (prop.anchor?.[1] ?? 50) / 100 : 0)) + "%",
-            width: prop.mounted ? prop.size + "%" : "max(44px, " + prop.size + "%)",
+            width: prop.mounted || prop.fitted ? prop.size + "%" : "max(44px, " + prop.size + "%)",
             "--prop-x": -(prop.anchor?.[0] ?? 50) + "%", "--prop-y": -(prop.anchor?.[1] ?? 50) + "%",
             "--prop-angle": (prop.angle ?? 0) + "deg",
             "--slide-x": (prop.mounted?.slide.x ?? 0) + "%",
@@ -171,7 +174,7 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
               <div className="clamp-sprite" data-closed={prop.mounted.clamp.closed || undefined}
                 style={{ aspectRatio: prop.mounted.clamp.ratio, backgroundImage: "url(" + prop.src + ")" }} />
             </div>
-          ) : <img className={prop.mounted ? "mounted-art" : undefined} src={prop.src} data-prop-tone={prop.tone} alt="" draggable={false} />}
+          ) : <img className={prop.mounted ? "mounted-art" : undefined} src={prop.src} alt="" draggable={false} />}
         </div>
       ))}
       {targets.map((target) => (
@@ -192,7 +195,7 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
           }} />
       ))}
       {drag && createPortal(
-        <img className="scene-carried" src={drag.prop.dragSrc ?? drag.prop.src} data-prop-tone={drag.prop.tone} alt="" draggable={false}
+        <img className="scene-carried" src={drag.prop.dragSrc ?? drag.prop.src} alt="" draggable={false}
           style={{ left: drag.x, top: drag.y, width: drag.width, rotate: (drag.prop.angle ?? 0) + "deg" }} />,
         document.body,
       )}
@@ -206,31 +209,27 @@ function SceneFeedback({ feedback }: { feedback: Feedback | null }) {
   </p>;
 }
 
-const rackShelves = [
-  { rest: 16.3, centers: [14.5, 24.8, 35.1, 45.4, 55.7, 65.9, 76.2, 86.5] },
-  { rest: 34.2, centers: [13.9, 24.2, 34.6, 44.9, 55.2, 65.5, 75.8, 86.1] },
-];
 const rackPockets = rackRows.flatMap((weights, shelf) => weights.map((weight, pair) => {
-  const { centers, rest } = rackShelves[shelf];
-  const positions = [centers[pair * 2], centers[pair * 2 + 1]];
+  const [first, second] = rackArt.shelves[shelf].slice(pair * 2, pair * 2 + 2);
+  const positions = [first[0], second[0]];
   const target = rackTargets.find((spot) => spot.weightKg === weight);
-  return { weight, shelf, pair, positions, rest, x: (positions[0] + positions[1]) / 2, target };
+  return { weight, shelf, pair, positions, rest: first[1], x: (positions[0] + positions[1]) / 2, target };
 }));
 
 const scatter = [
-  { x: 21, y: 56, size: 20, angle: -12 },
-  { x: 76, y: 75, size: 23, angle: 16 },
-  { x: 50, y: 65, size: 25, angle: -16 },
-  { x: 48, y: 88, size: 26, angle: 14 },
-  { x: 79, y: 50, size: 24, angle: -8 },
-  { x: 19, y: 81, size: 27, angle: 16 },
+  { x: 22, y: 65, size: 19, angle: -13 },
+  { x: 77, y: 86, size: 19, angle: 18 },
+  { x: 50, y: 69, size: 21, angle: 12 },
+  { x: 45, y: 88, size: 21, angle: -13 },
+  { x: 80, y: 63, size: 22, angle: 3 },
+  { x: 19, y: 84, size: 22, angle: 12 },
 ];
 
 const rackDropTargets = [
   ...rackPockets.flatMap(({ target, x, rest }) => target ? [
-    { ...target, x, y: rest - 4.3, width: 20.2, height: 12.8 },
+    { ...target, x, y: rest - 2.2, width: 19.7, height: 14.8 },
   ] : []),
-  { id: floorId, label: "На пол перед стойкой", x: 50, y: 72.5, width: 96, height: 53 },
+  { id: floorId, label: "На пол перед стойкой", x: 50, y: 79, width: 97, height: 42 },
 ];
 
 export function DumbbellScene({ station, progress, submit }: Props & { station: Station }) {
@@ -239,13 +238,16 @@ export function DumbbellScene({ station, progress, submit }: Props & { station: 
   const props = station.items.map<Prop>((item, index) => {
     const spot = rackPockets.find((pocket) => pocket.target && pocket.target.id === assigned[item.id]);
     const pair = spot ? Object.keys(assigned).filter((id) => assigned[id] === spot.target?.id) : [];
+    const art = rackArt.parts[String(item.weightKg) as keyof typeof rackArt.parts];
+    const dragSrc = asset("dumbbell-floor-" + item.weightKg);
     const position = spot ? {
       x: spot.positions[pair.indexOf(item.id)], y: spot.rest,
-      size: 11.8, angle: -5, anchor: [50, 85] as const,
+      size: art.width, anchor: [art.anchor[0], art.anchor[1]] as const,
     } : scatter[index];
     return {
       ...position, id: item.id, label: item.label, location: assigned[item.id] ?? floorId,
-      src: sceneAsset("dumbbell-" + item.weightKg),
+      src: spot ? asset("rack-dumbbell-" + item.weightKg) : dragSrc,
+      dragSrc, fitted: Boolean(spot),
     };
   });
 
@@ -253,20 +255,14 @@ export function DumbbellScene({ station, progress, submit }: Props & { station: 
     <div className="dumbbell-board">
       <InteractionField name="gym-floor" props={props} targets={rackDropTargets} feedback={feedback} setFeedback={setFeedback}
         onDrop={(prop, destination) => submit({ kind: "place", stage: "DUMBBELLS", item: prop.id, destination })}>
-        <img className="scene-backdrop" src={sceneAsset("gym-floor")} alt="" draggable={false} />
+        <img className="scene-backdrop" src={asset("rack-studio")} draggable={false}
+          alt="На верхней полке стоят пары 2, 4 и 6 кг. На нижней стоят пары 10 и 14 кг." />
         {rackPockets.map((pocket) => {
           const paired = pocket.target && props.filter((prop) => prop.location === pocket.target?.id).length === 2;
           return (
-            <div className="rack-pair" data-shelf={pocket.shelf + 1} data-first-slot={pocket.pair * 2 + 1}
-              data-weight={pocket.weight} data-paired={paired || undefined} aria-hidden="true" key={pocket.weight}>
-              {pocket.positions.map((x) => pocket.target
-                ? <span className="rack-cradle" key={x} style={{ left: x + "%", top: pocket.rest + "%" }} />
-                : <img className="rack-stock" key={x} src={asset("rack-stock")} alt=""
-                    style={{ left: x + "%", top: pocket.rest + "%", width: (9 + pocket.weight * .17) + "%" }} />)}
-              <span className="rack-weight" data-task={Boolean(pocket.target)} style={{ left: pocket.x + "%", top: (pocket.rest + 2.4) + "%" }}>
-                {pocket.weight} кг
-              </span>
-            </div>
+            <span className="rack-pair" data-shelf={pocket.shelf + 1} data-first-slot={pocket.pair * 2 + 1}
+              data-paired={paired || undefined} aria-hidden="true" key={pocket.weight}
+              style={{ left: pocket.x + "%", top: pocket.rest + "%" }} />
           );
         })}
       </InteractionField>
@@ -276,25 +272,20 @@ export function DumbbellScene({ station, progress, submit }: Props & { station: 
 }
 
 const barbellTargets = [
-  { id: "LEFT", label: "Левая втулка грифа", x: 19, y: 35, width: 36, height: 42 },
-  { id: "RIGHT", label: "Правая втулка грифа", x: 81, y: 31, width: 36, height: 42 },
-  { id: floorId, label: "Лоток для дисков и замков", x: 50, y: 78, width: 98, height: 44 },
+  { id: "LEFT", label: "Левая втулка грифа", ...onShaft(-.83), width: 31, height: 34 },
+  { id: "RIGHT", label: "Правая втулка грифа", ...onShaft(.83), width: 31, height: 34 },
+  { id: floorId, label: "Лоток для дисков и замков", x: 50, y: 75, width: 98, height: 49 },
 ] as const;
 
-const traySpots: Record<string, Point & { angle: number }> = {
-  DISK_20_A: { x: 35, y: 87, angle: -9 },
-  DISK_20_B: { x: 52, y: 88, angle: 11 },
-  DISK_5_A: { x: 12, y: 66, angle: -17 },
-  DISK_5_B: { x: 29, y: 70, angle: 14 },
-  DISK_5_C: { x: 70, y: 88, angle: 20 },
-  DISK_5_D: { x: 87, y: 87, angle: -15 },
-  DISK_10_A: { x: 49, y: 65, angle: -9 },
-  DISK_10_B: { x: 69, y: 66, angle: 7 },
-  LOCK_A: { x: 88, y: 66, angle: 15 },
-  LOCK_B: { x: 13, y: 88, angle: -12 },
-};
+const traySlots = [
+  ["DISK_5_A", "DISK_5_B", "DISK_10_A", "DISK_20_A", "LOCK_A"],
+  ["DISK_5_C", "DISK_5_D", "DISK_10_B", "DISK_20_B", "LOCK_B"],
+] as const;
+const traySpots = Object.fromEntries(traySlots.flatMap((row, y) =>
+  row.map((id, x) => [id, { x: 12.4 + 18.8 * x, y: 67 + 20.5 * y }] as const),
+));
 
-const stockSize = { 5: 10.5, 10: 12.5, 20: 14.5 };
+const stockSize = { 5: 9.5, 10: 11.3, 20: 13.6 };
 const diskDetails = {
   5: { asset: "bar-disk-5", thickness: .029, pulse: undefined },
   10: { asset: "bar-disk-10", thickness: .045, pulse: 13 },
@@ -302,7 +293,7 @@ const diskDetails = {
 } as const;
 
 function onShaft(axial: number) {
-  return { x: 50 + barbellArt.axis[0] * axial, y: 30 + barbellArt.axis[1] * axial };
+  return { x: 50 + barbellArt.axis[0] * axial, y: 26 + barbellArt.axis[1] * axial };
 }
 
 export function BarbellScene({ progress, submit }: Props) {
@@ -328,12 +319,12 @@ export function BarbellScene({ progress, submit }: Props) {
     const disk = prop.kind === "disk" ? prop : null;
     const details = disk ? diskDetails[disk.weightKg] : null;
     const mount = mounts.get(prop.id);
-    const dragSrc = sceneAsset(disk ? "disk-" + disk.weightKg : "collar");
+    const dragSrc = asset(disk ? "bar-tray-" + disk.weightKg : "bar-tray-collar");
     const pulse = details?.pulse === undefined ? undefined
       : typeof details.pulse === "number" ? details.pulse : Array.from(details.pulse);
     if (!mount) return {
       ...traySpots[prop.id], id: prop.id, label: prop.label, src: dragSrc, pulse, location: floorId,
-      size: disk ? stockSize[disk.weightKg] : 11.5, tone: disk ? disk.weightKg === 5 ? "aqua" : undefined : "coral",
+      size: disk ? stockSize[disk.weightKg] : 10.7,
     };
     const name = details?.asset ?? "bar-clamp";
     const art = barbellArt.parts[name];
@@ -367,7 +358,9 @@ export function BarbellScene({ progress, submit }: Props) {
         <img className="shaft-art" src={asset("bar-shaft")} alt="" draggable={false}
           style={{ left: onShaft(0).x + "%", top: onShaft(0).y + "%", width: shaft.width + "%",
             transform: "translate(" + -shaft.anchor[0] + "%," + -shaft.anchor[1] + "%)" }} />
-        <span className="tray-legend" aria-hidden="true">Диски и замки</span>
+        <div className="barbell-tray" aria-hidden="true">
+          {["5 кг", "10 кг", "20 кг", "Замки"].map((label) => <span key={label}>{label}</span>)}
+        </div>
         {barbellSides.map((side) => {
           const id = assembly.collars[side];
           const mount = id ? mounts.get(id) : undefined;
@@ -387,7 +380,10 @@ export function BarbellScene({ progress, submit }: Props) {
           );
         })}
       </InteractionField>
-      <div className="assembly-note"><span>Гриф {barbell.shaftKg} кг входит в общий вес</span><span>Защёлкнуто {collarCount}/2</span></div>
+      <div className="assembly-note">
+        <span>Гриф весит {barbell.shaftKg} кг</span>
+        <span><Icon name="lock" size={14} /> Замки {collarCount}/2</span>
+      </div>
       <SceneFeedback feedback={feedback} />
       <SceneButton type="button" className="button primary assembly-check" onActivate={verify}>Проверить <Icon name="check" size={18} /></SceneButton>
     </div>

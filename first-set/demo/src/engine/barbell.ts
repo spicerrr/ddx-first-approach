@@ -9,7 +9,7 @@ export type BarbellAssembly = {
 export type BarbellDestination = BarbellSide | typeof floorId;
 
 export function newAssembly(): BarbellAssembly {
-  return { disks: { LEFT: ["DISK_20_A"], RIGHT: ["DISK_20_B"] }, collars: {}, locked: {} };
+  return { disks: { LEFT: [], RIGHT: [] }, collars: {}, locked: {} };
 }
 
 export function moveBarbell(assembly: BarbellAssembly, id: string, destination: BarbellDestination) {
