@@ -1,8 +1,9 @@
-import { lazy, Suspense, useRef, useState, type MouseEvent } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { benchTask, type Action, type Progress, type Result } from "../engine/game";
 import { benchFinalCheck, benchParts, benchPreparation, type BenchPart, type Station } from "../engine/scenario";
 import type { BenchClip, BenchGesture, BenchPose } from "./bench-view";
 import { Equipment, Icon } from "./graphics";
+import { SceneButton } from "./scene-button";
 
 const BenchView = lazy(() => import("./bench-view"));
 
@@ -117,19 +118,19 @@ export function BenchChecks({ station, progress, submit }: {
     ReleaseSeatLatch: Number(part === "seat" && step === "raise"),
   };
 
-  function keepFocus(event?: MouseEvent) {
-    if (event?.detail === 0) {
+  function keepFocus(keyboard = false) {
+    if (keyboard) {
       requestAnimationFrame(() => guide.current?.querySelector("button")?.focus({ preventScroll: true }));
     }
   }
 
-  function checkStep(id: string, event: MouseEvent) {
+  function checkStep(id: string, keyboard: boolean) {
     const result = submit({ kind: "bench", check: id });
     setFeedback({ text: result.message, error: !result.accepted });
-    if (result.accepted) keepFocus(event);
+    if (result.accepted) keepFocus(keyboard);
   }
 
-  function chooseMechanism(choice: typeof mechanisms[number], event: MouseEvent) {
+  function chooseMechanism(choice: typeof mechanisms[number], keyboard: boolean) {
     if (choice.id !== part) {
       setFeedback({ text: choice.use, error: true });
       return;
@@ -137,10 +138,10 @@ export function BenchChecks({ station, progress, submit }: {
     setStep("release");
     setHint(false);
     setFeedback(null);
-    keepFocus(event);
+    keepFocus(keyboard);
   }
 
-  function adjust(event?: MouseEvent) {
+  function adjust(keyboard = false) {
     if (!part) return;
     if (step === "release" || step === "identify") {
       setStep("raise");
@@ -156,7 +157,7 @@ export function BenchChecks({ station, progress, submit }: {
         ? { text: part === "backrest" ? "Фиксация спинки проверена." : "Фиксация сиденья проверена." }
         : { text: result.message, error: true });
     }
-    keepFocus(event);
+    keepFocus(keyboard);
   }
 
   const atLatch = step === "identify" || step === "release";
@@ -202,25 +203,25 @@ export function BenchChecks({ station, progress, submit }: {
         {check && (
           <div className="bench-options">
             {check.options.map(({ id, label }) => (
-              <button key={id} className="button secondary" type="button" onClick={(event) => checkStep(id, event)}>{label}</button>
+              <SceneButton key={id} className="button secondary" type="button" onActivate={(keyboard) => checkStep(id, keyboard)}>{label}</SceneButton>
             ))}
           </div>
         )}
         {findLatch && (
           <div className="bench-options">
             {mechanisms.map((choice) => (
-              <button key={choice.id} className={`button ${hint && part === choice.id ? "primary" : "secondary"}`} type="button"
-                onClick={(event) => chooseMechanism(choice, event)}>{choice.label}</button>
+              <SceneButton key={choice.id} className={`button ${hint && part === choice.id ? "primary" : "secondary"}`} type="button"
+                onActivate={(keyboard) => chooseMechanism(choice, keyboard)}>{choice.label}</SceneButton>
             ))}
-            <button className="button quiet" type="button" onClick={() => {
+            <SceneButton className="button quiet" type="button" onActivate={() => {
               setHint(true);
               setFeedback(null);
-            }}>Подсказка</button>
+            }}>Подсказка</SceneButton>
           </div>
         )}
-        {instruction && <button type="button" className="button primary" aria-describedby="bench-detail" onClick={adjust}>
+        {instruction && <SceneButton type="button" className="button primary" aria-describedby="bench-detail" onActivate={adjust}>
           {instruction.button} <Icon name="arrow" />
-        </button>}
+        </SceneButton>}
         <p className={`bench-feedback${feedback?.error ? " bench-error" : ""}`} role="status" aria-live="polite">
           {feedback?.text ?? ""}
         </p>

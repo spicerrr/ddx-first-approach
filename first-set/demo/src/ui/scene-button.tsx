@@ -1,35 +1,32 @@
 import { useRef, type ComponentPropsWithoutRef } from "react";
 
-type Props = Omit<ComponentPropsWithoutRef<"button">, "onClick"> & { onActivate: () => void };
+type Props = Omit<ComponentPropsWithoutRef<"button">, "onClick" | "onTouchStart" | "onTouchEnd" | "onTouchCancel"> & {
+  onActivate: (keyboard: boolean) => void;
+};
 
 export function SceneButton({ onActivate, ...props }: Props) {
   const start = useRef<{ id: number; x: number; y: number } | null>(null);
-  const handled = useRef(false);
   return (
     <button {...props}
-      onPointerDown={(event) => {
-        handled.current = false;
-        start.current = event.pointerType === "touch" && event.isPrimary
-          ? { id: event.pointerId, x: event.clientX, y: event.clientY }
+      onTouchStart={(event) => {
+        const finger = event.changedTouches.item(0);
+        start.current = event.touches.length === 1 && finger
+          ? { id: finger.identifier, x: finger.clientX, y: finger.clientY }
           : null;
       }}
-      onPointerCancel={() => { start.current = null; }}
-      onPointerUp={(event) => {
+      onTouchCancel={() => { start.current = null; }}
+      onTouchEnd={(event) => {
         const tap = start.current;
         start.current = null;
-        if (!tap || tap.id !== event.pointerId || Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 14) return;
+        if (!tap) return;
+        const finger = Array.from(event.changedTouches).find((touch) => touch.identifier === tap.id);
+        if (!finger || Math.hypot(finger.clientX - tap.x, finger.clientY - tap.y) > 14) return;
         const rect = event.currentTarget.getBoundingClientRect();
-        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
-        // A touch tap can arrive without a compatibility click after a captured drag.
-        handled.current = true;
-        onActivate();
+        if (finger.clientX < rect.left || finger.clientX > rect.right || finger.clientY < rect.top || finger.clientY > rect.bottom) return;
+        // Cancel the compatibility click before navigation can replace the tapped element.
+        event.preventDefault();
+        onActivate(false);
       }}
-      onClick={(event) => {
-        if (handled.current && event.detail > 0) {
-          handled.current = false;
-          return;
-        }
-        onActivate();
-      }} />
+      onClick={(event) => onActivate(event.detail === 0)} />
   );
 }

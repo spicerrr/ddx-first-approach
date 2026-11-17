@@ -31,11 +31,11 @@ export function Home({ heading, begin, skip }: { heading: Heading; begin: () => 
         <div className="welcome-copy">
           <h1 ref={heading} tabIndex={-1}>Первый подход</h1>
           <p className="intro-text">Знакомство с залом перед первой тренировкой.</p>
-          <button type="button" className="button primary" onClick={begin}>Начать знакомство <Icon name="arrow" /></button>
+          <SceneButton type="button" className="button primary" onActivate={begin}>Начать знакомство <Icon name="arrow" /></SceneButton>
         </div>
       </article>
       <div className="welcome-actions">
-        <button type="button" className="button quiet" onClick={skip}>Пропустить</button>
+        <SceneButton type="button" className="button quiet" onActivate={skip}>Пропустить</SceneButton>
       </div>
     </section>
   );
@@ -49,7 +49,7 @@ export function Briefing({ heading, next }: { heading: Heading; next: () => void
         <p className="coach-label">Тренер клуба</p>
         <h1 ref={heading} tabIndex={-1}>Привет!</h1>
         <p>Давай пройдёмся по залу. Я покажу, где оставить инвентарь и как разобраться со скамьёй перед подходом.</p>
-        <button type="button" className="button primary" onClick={next}>К маршруту <Icon name="arrow" /></button>
+        <SceneButton type="button" className="button primary" onActivate={next}>К маршруту <Icon name="arrow" /></SceneButton>
       </div>
     </section>
   );
@@ -75,9 +75,9 @@ export function Route({ heading, progress, begin }: { heading: Heading; progress
           </li>;
         })}
       </ol>
-      <button type="button" className="button primary" onClick={begin}>
+      <SceneButton type="button" className="button primary" onActivate={begin}>
         {progress.phase === "ready" ? "Начать маршрут" : "Вернуться к заданию"} <Icon name="arrow" />
-      </button>
+      </SceneButton>
     </section>
   );
 }
@@ -96,9 +96,9 @@ export function Lesson({ heading, index, next }: { heading: Heading; index: numb
         <p className="accent-label">Станция {index + 1} из {stations.length} пройдена</p>
         <h1 ref={heading} tabIndex={-1}>{detail.lessonTitle}</h1>
         <p className="intro-text">{detail.lesson}</p>
-        <button type="button" className="button primary" onClick={next}>
+        <SceneButton type="button" className="button primary" onActivate={next}>
           {final ? "К результату" : "Следующая станция"} <Icon name="arrow" />
-        </button>
+        </SceneButton>
       </div>
     </section>
   );
@@ -130,9 +130,9 @@ export function Finish({ heading, training, home }: {
         <h1 ref={heading} tabIndex={-1}>Первый подход<br /><span>завершён</span></h1>
         <p className="intro-text">В зале можно продолжить знакомство с оборудованием вместе с тренером.</p>
         <div className="finish-actions">
-          <button type="button" className="button primary" onClick={() => training("smart-start")}>Smart Start <Icon name="arrow" /></button>
-          <button type="button" className="button secondary" onClick={() => training("intro")}>Ознакомительная тренировка <Icon name="arrow" /></button>
-          <button type="button" className="button quiet" onClick={home}>На главный экран</button>
+          <SceneButton type="button" className="button primary" onActivate={() => training("smart-start")}>Smart Start <Icon name="arrow" /></SceneButton>
+          <SceneButton type="button" className="button secondary" onActivate={() => training("intro")}>Ознакомительная тренировка <Icon name="arrow" /></SceneButton>
+          <SceneButton type="button" className="button quiet" onActivate={home}>На главный экран</SceneButton>
         </div>
       </div>
       <ul className="recap" aria-label="Памятка после прохождения">
@@ -168,7 +168,7 @@ export function TrainingInfo({ heading, active, back }: { heading: Heading; acti
   const options: Training[] = [active, alternate];
   return (
     <section className="training">
-      <button type="button" className="button quiet back-link" onClick={back}><Icon name="back" size={19} /> Назад</button>
+      <SceneButton type="button" className="button quiet back-link" onActivate={back}><Icon name="back" size={19} /> Назад</SceneButton>
       <h1 ref={heading} tabIndex={-1}>Знакомство с залом<br /><span>вместе с тренером</span></h1>
       <p className="intro-text">Расписание и запись доступны у DDX. Здесь можно посмотреть, чем отличаются занятия.</p>
       <div className="training-options">
@@ -195,8 +195,8 @@ export function Skip({ heading, back, training }: { heading: Heading; back: () =
     <section className="skip-screen">
       <h1 ref={heading} tabIndex={-1}>Знакомство <span>пропущено</span></h1>
       <p className="intro-text">К игре можно вернуться в любой момент. Открыть информацию о Smart Start можно сразу.</p>
-      <button type="button" className="button primary" onClick={training}>Узнать о Smart Start <Icon name="arrow" /></button>
-      <button type="button" className="button quiet back-link" onClick={back}><Icon name="back" size={19} /> На главный экран</button>
+      <SceneButton type="button" className="button primary" onActivate={training}>Узнать о Smart Start <Icon name="arrow" /></SceneButton>
+      <SceneButton type="button" className="button quiet back-link" onActivate={back}><Icon name="back" size={19} /> На главный экран</SceneButton>
     </section>
   );
 }
