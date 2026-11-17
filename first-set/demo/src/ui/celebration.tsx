@@ -13,7 +13,7 @@ export function CheckBurst({ label, className = "" }: { label?: string; classNam
   );
 }
 
-export function ShiftMedal() {
+export function FinishMedal() {
   return <div className="finish-medal" aria-hidden="true">
     <span><Icon name="check" size={42} /></span>
   </div>;

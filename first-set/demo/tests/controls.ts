@@ -28,7 +28,7 @@ export async function activate(page: Page, name: string, touch = false) {
 }
 
 export async function begin(page: Page, touch = false) {
-  for (const name of ["Начать знакомство", "Начать", "Начать смену"]) await activate(page, name, touch);
+  for (const name of ["Попробовать в игре", "Начать подготовку", "К гантелям"]) await activate(page, name, touch);
 }
 
 export async function keyboardPlace(page: Page, [item, target]: readonly [string, string]) {
@@ -76,8 +76,7 @@ export async function noOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
 }
 
-export async function openBench(page: Page, touch = false) {
-  await activate(page, "Попробовать на скамье", touch);
+export async function openBench(page: Page) {
   await expect(page.locator(".bench-view")).toHaveAttribute("data-model", "ready");
 }
 

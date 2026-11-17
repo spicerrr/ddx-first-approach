@@ -5,21 +5,21 @@ for (const width of [320, 375, 402, 430, 768, 1440]) {
   test(`экраны и доступность кнопок при ширине ${width} px`, async ({ page }) => {
     await page.setViewportSize({ width, height: width < 700 ? 874 : 900 });
     await page.goto("");
-    await expect(button(page, "Начать знакомство")).toBeVisible();
+    await expect(button(page, "Попробовать в игре")).toBeVisible();
     await noOverflow(page);
     if (width >= 520) {
       expect(await page.locator(".app").evaluate((el) => [el.clientWidth, el.clientHeight])).toEqual([402, 874]);
       const bounds = (await page.locator(".app").boundingBox())!;
       expect(bounds.width / bounds.height).toBeCloseTo(402 / 874, 2);
     }
-    await button(page, "Начать знакомство").click();
-    const cover = page.locator(".shift-cover-hero");
+    await button(page, "Попробовать в игре").click();
+    const cover = page.locator(".intro-cover-hero");
     const title = await cover.getByRole("heading").boundingBox();
     const portrait = await cover.locator("img").boundingBox();
     expect(portrait!.y).toBeGreaterThanOrEqual(title!.y + title!.height);
     await noOverflow(page);
-    await button(page, "Начать").click();
-    await button(page, "Начать смену").click();
+    await button(page, "Начать подготовку").click();
+    await button(page, "К гантелям").click();
     for (const [index, name] of ["dumbbells", "barbell", "bench", "inventory"].entries()) {
       await noOverflow(page);
       const controls = await page.locator("main button:not(:disabled)").evaluateAll((buttons) =>

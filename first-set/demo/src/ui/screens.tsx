@@ -3,32 +3,29 @@ import { stationDetails, stations, type StationId } from "../engine/scenario";
 import type { Progress } from "../engine/game";
 import { asset, Icon } from "./graphics";
 import { SceneButton } from "./scene-button";
-import { CheckBurst, Confetti, ShiftMedal } from "./celebration";
+import { CheckBurst, Confetti, FinishMedal } from "./celebration";
+import { CoachMessage } from "./coach-message";
 
 type Heading = Ref<HTMLHeadingElement>;
 export type Training = "smart-start" | "intro";
 
-const stationArt: Record<StationId, string> = {
+const stationArt = {
   DUMBBELLS: "dumbbell-floor-12",
   BARBELL: "bar-shaft",
-  BENCH: "bench",
   INVENTORY: "mat",
-};
+} satisfies Record<Exclude<StationId, "BENCH">, string>;
 
-export function ShiftCover({ heading, begin, skip }: { heading: Heading; begin: () => void; skip: () => void }) {
+export function IntroCover({ heading, begin, training }: { heading: Heading; begin: () => void; training: () => void }) {
   return (
-    <section className="shift-cover">
-      <div className="shift-cover-hero">
-        <div className="shift-cover-copy">
-          <p>Твоя первая смена</p>
-          <h1 ref={heading} tabIndex={-1}>Первый подход</h1>
-        </div>
-        <img src={asset("coach-avatar-blue")} alt="" width={640} height={800} fetchPriority="high" />
+    <section className="intro-cover">
+      <div className="intro-cover-hero">
+        <h1 ref={heading} tabIndex={-1}>Первый раз в зале</h1>
+        <img src={asset("coach-greeting")} alt="" width={407} height={510} fetchPriority="high" />
       </div>
-      <p className="shift-cover-intro">Привет! Я тренер клуба. Хочешь пройтись по залу и попробовать, как здесь всё устроено?</p>
-      <div className="shift-cover-actions">
-        <SceneButton type="button" className="button primary" onActivate={begin}>Начать <Icon name="arrow" /></SceneButton>
-        <SceneButton type="button" className="button quiet" onActivate={skip}>Пропустить игру</SceneButton>
+      <p className="intro-cover-message">Привет! Давай попробуем то, что пригодится на первой тренировке. Я покажу, как подобрать вес и настроить оборудование.</p>
+      <div className="intro-cover-actions">
+        <SceneButton type="button" className="button primary" onActivate={begin}>Начать подготовку <Icon name="arrow" /></SceneButton>
+        <SceneButton type="button" className="button ghost" onActivate={training}>Занятия с тренером <Icon name="arrow" size={17} /></SceneButton>
       </div>
     </section>
   );
@@ -37,8 +34,10 @@ export function ShiftCover({ heading, begin, skip }: { heading: Heading; begin: 
 export function Route({ heading, progress, begin }: { heading: Heading; progress: Progress; begin: () => void }) {
   return (
     <section className="route">
-      <h1 ref={heading} tabIndex={-1}>Твоя смена</h1>
-      <p className="intro-text">{progress.phase === "ready" ? "Для начала заглянем к стойке с гантелями." : "Можно вернуться к тому месту, где мы остановились."}</p>
+      <h1 ref={heading} tabIndex={-1}>Что пригодится в зале</h1>
+      <CoachMessage>{progress.phase === "ready"
+        ? "Представь, что ты уже в зале. Сначала найдём подходящий вес, потом подготовим оборудование к подходу."
+        : "Продолжим с того места, где остановились."}</CoachMessage>
       <ol className="route-stations">
         {stations.map(({ stage }, index) => {
           const completed = index < progress.stageIndex;
@@ -47,17 +46,18 @@ export function Route({ heading, progress, begin }: { heading: Heading; progress
             data-progress={completed ? "done" : current ? "current" : "locked"}>
             <span className="route-number">{completed ? <Icon name="check" size={16} /> : index + 1}</span>
             <div><strong>{stationDetails[stage].name}</strong>
-              <span>{completed ? "Готово" : stationDetails[stage].mission}</span>
+              <span>{stationDetails[stage].purpose}</span>
             </div>
             <div className="route-art">
-              <img className="equipment route-prop" src={asset(stationArt[stage])} alt="" />
+              {stage === "BENCH" ? <Icon name="bench" size={35} /> :
+                <img className="equipment route-prop" src={asset(stationArt[stage])} alt="" />}
               {!completed && !current && <span className="route-lock" aria-label="Откроется после предыдущего задания"><Icon name="lock" size={14} /></span>}
             </div>
           </li>;
         })}
       </ol>
       <SceneButton type="button" className="button primary" onActivate={begin}>
-        {progress.phase === "ready" ? "Начать смену" : "Вернуться к заданию"} <Icon name="arrow" />
+        {progress.phase === "ready" ? "К гантелям" : "Продолжить"} <Icon name="arrow" />
       </SceneButton>
     </section>
   );
@@ -85,11 +85,11 @@ export function Finish({ heading, training, home }: {
     <section className="finish">
       <Confetti />
       <div>
-        <ShiftMedal />
-        <h1 ref={heading} tabIndex={-1}>Смена завершена</h1>
-        <p className="intro-text">Спасибо за компанию! Хочешь попробовать всё в зале? На Smart Start тренер покажет оборудование и поможет сделать первый подход.</p>
+        <FinishMedal />
+        <h1 ref={heading} tabIndex={-1}>До встречи в зале</h1>
+        <p className="intro-text">Если хочется начать вместе с тренером, можно выбрать ознакомительную тренировку в своём клубе или короткое занятие в мини-группе.</p>
         <div className="finish-actions">
-          <SceneButton type="button" className="button primary" onActivate={() => training("smart-start")}>Посмотреть занятие Smart Start <Icon name="arrow" /></SceneButton>
+          <SceneButton type="button" className="button primary" onActivate={() => training("intro")}>Выбрать занятие с тренером <Icon name="arrow" /></SceneButton>
           <SceneButton type="button" className="button quiet" onActivate={home}>На главный экран</SceneButton>
         </div>
       </div>
@@ -100,13 +100,15 @@ export function Finish({ heading, training, home }: {
 const trainingOptions = {
   "smart-start": {
     name: "Smart Start",
-    description: "Вводное занятие в небольшой группе. Тренер знакомит с упражнениями и оборудованием.",
+    description: "30 минут в мини-группе. Выбираешь группу мышц, а тренер показывает упражнения и помогает с техникой.",
+    action: "Посмотреть занятия Smart Start",
     href: "https://www.ddxfitness.ru/smart-start/",
     icon: "gym",
   },
   intro: {
     name: "Ознакомительная тренировка",
-    description: "Знакомство с тренажёрами и зонами своего клуба вместе с тренером.",
+    description: "Для первого визита. Тренер покажет зоны твоего клуба и проведёт пробную тренировку.",
+    action: "Открыть расписание по клубам",
     href: "https://www.ddxfitness.ru/group-training/3076/",
     icon: "person",
   },
@@ -118,8 +120,8 @@ export function TrainingInfo({ heading, active, back }: { heading: Heading; acti
   return (
     <section className="training">
       <SceneButton type="button" className="button quiet back-link" onActivate={back}><Icon name="back" size={19} /> Назад</SceneButton>
-      <h1 ref={heading} tabIndex={-1}>Знакомство с залом<br /><span>вместе с тренером</span></h1>
-      <p className="intro-text">Расписание и запись доступны у DDX. Здесь можно посмотреть, чем отличаются занятия.</p>
+      <h1 ref={heading} tabIndex={-1}>Первый визит<br /><span>с тренером</span></h1>
+      <p className="intro-text">Можно начать с визита в свой клуб или выбрать короткое занятие на нужную группу мышц. Запись доступна в приложении DDX Fitness.</p>
       <div className="training-options">
         {options.map((id) => {
           const option = trainingOptions[id];
@@ -129,23 +131,12 @@ export function TrainingInfo({ heading, active, back }: { heading: Heading; acti
               <h2>{option.name}</h2>
               <p>{option.description}</p>
               <a className={`button ${id === active ? "primary" : "secondary"}`} href={option.href} target="_blank" rel="noopener noreferrer">
-                О занятии на сайте DDX <Icon name="external" size={18} />
+                {option.action} <Icon name="external" size={18} />
               </a>
             </article>
           );
         })}
       </div>
-    </section>
-  );
-}
-
-export function Skip({ heading, back, training }: { heading: Heading; back: () => void; training: () => void }) {
-  return (
-    <section className="skip-screen">
-      <h1 ref={heading} tabIndex={-1}>Знакомство <span>пропущено</span></h1>
-      <p className="intro-text">К игре можно вернуться в любой момент. Открыть информацию о Smart Start можно сразу.</p>
-      <SceneButton type="button" className="button primary" onActivate={training}>Узнать о Smart Start <Icon name="arrow" /></SceneButton>
-      <SceneButton type="button" className="button quiet back-link" onActivate={back}><Icon name="back" size={19} /> На главный экран</SceneButton>
     </section>
   );
 }

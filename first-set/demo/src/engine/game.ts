@@ -153,7 +153,7 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
     const expected = inventoryDestination(item);
     if (target?.id !== expected) {
       const label = station.targets.find(({ id }) => id === expected)?.label;
-      return reject(label ? `Посмотри на зону «${label}». Там следующий человек будет искать этот инвентарь.` : "Давай найдём подходящую зону хранения.");
+      return reject(label ? `Для этого предмета подходит зона «${label}». Попробуй её.` : "Давай найдём подходящую зону хранения.");
     }
     assigned[item.id] = action.destination;
   }

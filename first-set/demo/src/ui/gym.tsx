@@ -5,7 +5,7 @@ import type { Action, Progress, Result } from "../engine/game";
 import { barbell, barbellSides, floorId, rackRows, rackTargets, stationDetails, type BarbellSide, type Station } from "../engine/scenario";
 import { asset, Icon, inventoryAsset } from "./graphics";
 import { SceneButton } from "./scene-button";
-import { CoachMessage } from "./coach-message";
+import { CoachFeedback, CoachHint } from "./coach-message";
 import barbellArt from "./barbell-art.json";
 import rackArt from "./rack-art.json";
 
@@ -26,7 +26,7 @@ type Prop = Point & {
   fitted?: boolean;
   mounted?: { slide: Point; clamp?: { ratio: number; height: number; closed: boolean } };
   dragSrc?: string;
-  touchPickup?: string;
+  outermostId?: string;
 };
 type Target = Point & { id: string; label: string; width: number; height: number };
 type Held = {
@@ -77,15 +77,14 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
   }
 
   function pointerDown(event: PointerEvent<HTMLDivElement>, prop: Prop) {
-    if (!event.isPrimary || event.button !== 0) return;
-    const picked = event.pointerType === "touch" && prop.touchPickup
-      ? props.find((item) => item.id === prop.touchPickup) ?? prop : prop;
+    if (!event.isPrimary || event.button !== 0 || start.current) return;
+    const picked = props.find((item) => item.id === prop.outermostId) ?? prop;
     const rect = event.currentTarget.getBoundingClientRect();
-    const scale = field.current ? field.current.getBoundingClientRect().width / field.current.offsetWidth : 1;
+    const width = picked === prop ? rect.width : field.current!.getBoundingClientRect().width * picked.size / 100;
     start.current = {
-      prop: picked, id: event.pointerId, moved: false, width: event.currentTarget.offsetWidth * scale,
+      prop: picked, id: event.pointerId, moved: false, width,
       origin: { x: event.clientX, y: event.clientY },
-      offset: { x: event.clientX - rect.left, y: event.clientY - rect.top },
+      offset: picked === prop ? { x: event.clientX - rect.left, y: event.clientY - rect.top } : { x: width / 2, y: width / 2 },
     };
     setKeyboard(null);
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -97,7 +96,6 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
     if (!held.moved) {
       if (Math.hypot(event.clientX - held.origin.x, event.clientY - held.origin.y) < 6) return;
       held.moved = true;
-      setFeedback(null);
       setLanded((ids) => ids.filter((id) => id !== held.prop.id));
     }
     setDrag({
@@ -206,10 +204,6 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
   );
 }
 
-function SceneFeedback({ feedback, greeting }: { feedback: Feedback | null; greeting: string }) {
-  return <CoachMessage className="scene-response" live>{feedback?.message ?? greeting}</CoachMessage>;
-}
-
 const rackPockets = rackRows.flatMap((weights, shelf) => weights.map((weight, pair) => {
   const [first, second] = rackArt.shelves[shelf].slice(pair * 2, pair * 2 + 2);
   const positions = [first[0], second[0]];
@@ -254,7 +248,7 @@ export function DumbbellScene({ station, progress, submit }: Props & { station: 
 
   return (
     <div className="dumbbell-board">
-      <SceneFeedback feedback={feedback} greeting={stationDetails.DUMBBELLS.instruction} />
+      <CoachFeedback hint={feedback?.message} message={stationDetails.DUMBBELLS.instruction} />
       <InteractionField name="gym-floor" props={props} targets={rackDropTargets} feedback={feedback} setFeedback={setFeedback}
         onDrop={(prop, destination) => submit({ kind: "place", stage: "DUMBBELLS", item: prop.id, destination })}>
         <img className="scene-backdrop" src={asset("rack-studio")} draggable={false}
@@ -335,7 +329,7 @@ export function BarbellScene({ progress, submit }: Props) {
     const position = onShaft(mount.axial);
     return {
       ...position, id: prop.id, label: prop.label, src: asset(name), dragSrc, pulse, location: mount.side,
-      touchPickup: disk && !assembly.collars[mount.side] ? assembly.disks[mount.side].at(-1) : undefined,
+      outermostId: disk && !assembly.collars[mount.side] ? assembly.disks[mount.side].at(-1) : undefined,
       layer: 90 + Math.round(mount.axial * 70), size: art.width, anchor: [art.anchor[0], art.anchor[1]],
       mounted: {
         slide: { x: (end.x - position.x) / art.width * 100, y: (end.y - position.y) / art.height * 100 },
@@ -352,13 +346,10 @@ export function BarbellScene({ progress, submit }: Props) {
   const shaft = barbellArt.parts["bar-shaft"];
   return (
     <div className="barbell-board">
-      <SceneFeedback feedback={feedback} greeting={disksReady
-        ? "Вес распределён поровну. Осталось надеть замки и закрыть рычажки."
-        : (totalKg === barbell.targetKg ? diskHint(layout) : null) ?? stationDetails.BARBELL.instruction} />
-      <ol className="assembly-steps" aria-label="Порядок сборки">
-        <li data-state={disksReady ? "done" : "current"}><span>{disksReady ? <Icon name="check" size={16} /> : "1"}</span> Диски</li>
-        <li data-state={collarCount === 2 && disksReady ? "done" : disksReady ? "current" : "waiting"}><span>{collarCount === 2 && disksReady ? <Icon name="check" size={16} /> : "2"}</span> Замки</li>
-      </ol>
+      <CoachFeedback message={collarCount === 2
+        ? "Оба замка на месте. Можно проверить сборку."
+        : disksReady ? "Вес совпал. Теперь можно надеть замки и закрыть рычажки." : stationDetails.BARBELL.instruction}
+        hint={feedback?.message ?? (totalKg === barbell.targetKg ? diskHint(layout) : null)} />
       <div className="barbell-mass">
         <div><span>Текущий вес</span><strong key={totalKg} data-current-weight={totalKg} aria-live="polite">{totalKg} кг</strong></div>
         <p>Цель <strong>{barbell.targetKg} кг</strong></p>
@@ -391,6 +382,10 @@ export function BarbellScene({ progress, submit }: Props) {
           );
         })}
       </InteractionField>
+      <div className="barbell-tip" aria-live="polite">
+        {disksReady && !feedback && !Object.keys(assembly.collars).length &&
+          <CoachHint>С одинаковыми дисками проще набирать вес поровну. Можно начать с тяжёлых и добавлять их парами.</CoachHint>}
+      </div>
       <div className="assembly-note">
         <span>Гриф весит {barbell.shaftKg} кг</span>
         <span><Icon name="lock" size={14} /> Замки {collarCount}/2</span>
@@ -442,7 +437,7 @@ export function InventoryScene({ station, progress, submit }: Props & { station:
   });
   return (
     <div className="inventory-board">
-      <SceneFeedback feedback={feedback} greeting={stationDetails.INVENTORY.instruction} />
+      <CoachFeedback hint={feedback?.message} message={stationDetails.INVENTORY.instruction} />
       <InteractionField name="storage-floor" props={props} targets={zones} feedback={feedback} setFeedback={setFeedback}
         onDrop={(prop, destination) => submit({ kind: "place", stage: "INVENTORY", item: prop.id, destination })}>
         {zones.map((zone) => (

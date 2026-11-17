@@ -24,7 +24,6 @@ export const benchParts = ["backrest", "seat"] as const;
 export type BenchPart = typeof benchParts[number];
 export const benchNotches = [0, 1, 2, 3] as const;
 export type BenchNotch = typeof benchNotches[number];
-export const benchAngles = { backrest: [0, 10, 20, 30], seat: [0, 4, 8, 12] } as const;
 export const benchGoals = { backrest: 2, seat: 1 } as const satisfies Record<BenchPart, BenchNotch>;
 
 const dumbbells = rackWeights.flatMap((weightKg) =>
@@ -44,7 +43,6 @@ export type BarbellProp =
 export const barbell = {
   shaftKg: 20,
   targetKg: 80,
-  sleeveCapacity: 3,
   props: [
     { id: "DISK_20_A", label: "Диск 20 кг", kind: "disk", weightKg: 20 },
     { id: "DISK_20_B", label: "Диск 20 кг", kind: "disk", weightKg: 20 },
@@ -61,13 +59,13 @@ export const barbell = {
 
 export const stations: readonly Station[] = contractStations.map((station) => {
   switch (station.stage) {
-    case "DUMBBELLS": return { ...station, title: "Верни гантели", items: dumbbells, targets: rackTargets };
-    case "BARBELL": return { ...station, title: "Собери штангу", items: barbell.props };
+    case "DUMBBELLS": return { ...station, title: "Стойка с гантелями", items: dumbbells, targets: rackTargets };
+    case "BARBELL": return { ...station, title: "Штанга", items: barbell.props };
     case "BENCH": return {
-      ...station, title: "Помоги посетителю",
+      ...station, title: "Скамья",
       items: [],
     };
-    case "INVENTORY": return { ...station, title: "Освободи проход" };
+    case "INVENTORY": return { ...station, title: "Инвентарь" };
   }
 });
 export const lastStation = stations.length - 1;
@@ -80,34 +78,34 @@ export const stationTotal = (station: Station) => {
 export const stationDetails = {
   DUMBBELLS: {
     name: "Гантели",
-    mission: "Верни пары на стойку",
-    instruction: "Поможешь вернуть три пары? Следующему человеку будет проще найти свой вес. Лёгкие гантели ставим выше, на каждой полке вес растёт слева направо.",
+    purpose: "Где искать нужный вес",
+    instruction: "Начнём со стойки. Лёгкие гантели стоят выше, а вес в ряду растёт слева направо. Попробуешь найти места для трёх пар?",
     lessonTitle: "Гантели на месте",
     takeaway: "Лёгкие пары ставь выше, тяжёлые ниже. На каждой полке вес растёт слева направо.",
   },
   BARBELL: {
     name: "Штанга",
-    mission: `Собери ${barbell.targetKg} кг`,
-    instruction: `Как насчёт ${barbell.targetKg} кг? Чтобы штанга была в равновесии, вес дисков на обеих сторонах должен совпасть. Когда всё на месте, можно закрепить диски замками.`,
+    purpose: "Как распределить вес на грифе",
+    instruction: `Теперь к штанге. Для примера соберём ${barbell.targetKg} кг. Гриф весит ${barbell.shaftKg} кг, остальной вес поделим поровну.`,
     lessonTitle: "Штанга собрана",
     takeaway: "Набирай вес симметрично. Когда диски на месте, надень и защёлкни замки.",
   },
   BENCH: {
-    name: "Помощь посетителю",
-    mission: "Настрой скамью",
+    name: "Скамья",
+    purpose: "Как настроить наклон под упражнение",
     lessonTitle: "Скамья готова",
     takeaway: "Удерживай фиксатор, меняя наклон. В новом положении отпусти его и проверь фиксацию подушки.",
   },
   INVENTORY: {
     name: "Инвентарь",
-    mission: "Освободи проход",
-    instruction: "Инвентарь остался на полу после занятий. Поможешь разложить вещи по местам? Так к тренажёрам будет удобно пройти.",
+    purpose: "Где взять коврик, резинку или роллер",
+    instruction: "И напоследок посмотрим, где хранится инвентарь. Разложим предметы по местам, чтобы на тренировке было проще найти нужное.",
     lessonTitle: "Проход свободен",
     takeaway: "После подхода верни инвентарь в зоны хранения.",
   },
 } satisfies Record<StationId, {
   name: string;
-  mission: string;
+  purpose: string;
   instruction?: string;
   lessonTitle: string;
   takeaway: string;

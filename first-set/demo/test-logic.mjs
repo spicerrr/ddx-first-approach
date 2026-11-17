@@ -138,9 +138,13 @@ describe("Один игровой маршрут", () => {
     expect(reset.events).toBe(locked.events);
   });
 
-  it("зачитывает два симметричных решения только с замком на каждой втулке", () => {
-    for (const sequence of [tens, fives]) {
-      const prepared = [...twenties, ...sequence].reduce(accept, atStation(1));
+  it("зачитывает равный вес при разном числе дисков и двух замках", () => {
+    const fiveOnLeft = [
+      twenties[1], ...tens,
+      ...["A", "B", "C", "D"].map((copy) => move("DISK_5_" + copy, "LEFT")),
+    ];
+    for (const sequence of [[...twenties, ...tens], [...twenties, ...fives], fiveOnLeft]) {
+      const prepared = sequence.reduce(accept, atStation(1));
       reject(prepared, check, "по замку");
       const a = accept(prepared, move("LOCK_A", "RIGHT"));
       reject(a, check, "по замку");
@@ -171,12 +175,12 @@ describe("Один игровой маршрут", () => {
     const withoutTen = accept(allRemoved, move("DISK_10_B", floorId));
     const relocated = accept(withoutTen, move("DISK_20_A", "RIGHT"));
     expect(relocated.barbell.disks.RIGHT).toEqual(["DISK_20_B", "DISK_20_A"]);
-    const full = accept(relocated, move("DISK_5_A", "RIGHT"));
-    reject(full, move("DISK_5_B", "RIGHT"), "уже три диска");
+    const full = [move("DISK_5_A", "RIGHT"), move("DISK_5_B", "RIGHT")].reduce(accept, relocated);
+    expect(full.barbell.disks.RIGHT).toHaveLength(4);
     reject(full, move("LOCK_B", "RIGHT"), "осталось");
   });
 
-  it("проверяет углы посетителя до песочницы и ждёт ручного перехода", () => {
+  it("проверяет целевые положения скамьи до свободного режима и ждёт ручного перехода", () => {
     const state = atStation(2);
     reject(state, finishBench, "Отрегулируй спинку и сиденье");
     reject(state, adjust("seat", 4), "Выбери положение");

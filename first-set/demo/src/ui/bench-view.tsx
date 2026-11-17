@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { benchNotches, benchParts, type BenchNotch, type BenchPart } from "../engine/scenario";
-import { Equipment, Icon } from "./graphics";
+import { Icon } from "./graphics";
 
 const clips = ["RaiseBackrest", "RaiseSeat", "PullBackrestPin", "ReleaseSeatLatch"] as const;
 export type BenchClip = typeof clips[number];
@@ -394,7 +394,7 @@ export default function BenchView(props: Props) {
     cancel();
     window.addEventListener("blur", cancel);
     return () => window.removeEventListener("blur", cancel);
-  }, [props.part]);
+  }, [props.part, props.paused]);
 
   function updatePreview() {
     const active = manipulation.current;
@@ -465,7 +465,7 @@ export default function BenchView(props: Props) {
   }
 
   function keyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (props.paused) return;
+    if (props.paused || status === "loading" || event.target !== event.currentTarget) return;
     const active = manipulation.current;
     if (event.code === "Space") {
       event.preventDefault();
@@ -509,12 +509,9 @@ export default function BenchView(props: Props) {
         if (!event.currentTarget.contains(event.relatedTarget) && manipulation.current.keyboard) relock(false);
       }}>
       <div className="bench-canvas" ref={surface} hidden={status === "failed"} />
-      {status !== "ready" && (
-        <div className="bench-view-placeholder">
-          <Equipment name="bench" alt="Регулируемая скамья" />
-          <p role="status">{status === "failed" ? "Схема регулировки" : "Загружается 3D-модель…"}</p>
-        </div>
-      )}
+      {status !== "ready" && <p className="bench-status" role="status">{status === "failed"
+        ? "Модель не загрузилась. Движения можно попробовать по меткам."
+        : "Загружается 3D-модель…"}</p>}
       {status === "ready" && (
         <button type="button" className="bench-camera-button" aria-label="Вернуть исходный ракурс"
           title="Вернуть исходный ракурс" onClick={() => viewer.current?.resetView()}><Icon name="rotate" size={20} /></button>

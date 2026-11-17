@@ -5,12 +5,12 @@ import { stations, stationTotal } from "./engine/scenario";
 import { BenchStation } from "./ui/bench";
 import { Icon } from "./ui/graphics";
 import { BarbellScene, DumbbellScene, InventoryScene } from "./ui/gym";
-import { Finish, Route, SceneResult, ShiftCover, Skip, TrainingInfo, type Training } from "./ui/screens";
+import { Finish, IntroCover, Route, SceneResult, TrainingInfo, type Training } from "./ui/screens";
 import { ClubAction, ClubCalendar, ClubHeader, ClubNavigation, Home, type ClubTab } from "./ui/home";
 import { SceneButton } from "./ui/scene-button";
 import "./style.css";
 
-type EntryView = ClubTab | "cover" | "route" | "play" | "skip";
+type EntryView = ClubTab | "cover" | "route" | "play";
 type View = EntryView | "training";
 
 function App() {
@@ -113,8 +113,6 @@ function App() {
               </SceneButton>
               {(view === "route" || view === "cover") &&
                 <SceneButton type="button" className="button quiet scene-close" onActivate={closeApproach} aria-label="Выйти"><Icon name="close" size={22} /></SceneButton>}
-              {view === "skip" &&
-                <SceneButton type="button" className="button quiet training-link" onActivate={() => openTraining("smart-start")}>Smart Start <Icon name="external" size={17} /></SceneButton>}
             </div>
           </header>
         )}
@@ -123,9 +121,8 @@ function App() {
           {view === "home" && <Home heading={heading} begin={() => begin("home")} training={openTraining} calendar={() => setView("calendar")} />}
           {view === "calendar" && <ClubCalendar heading={heading} training={openTraining} approach={() => begin("calendar")} />}
           {view === "action" && <ClubAction heading={heading} begin={() => begin("action")} training={openTraining} />}
-          {view === "cover" && <ShiftCover heading={heading} begin={() => setView("route")} skip={() => setView("skip")} />}
+          {view === "cover" && <IntroCover heading={heading} begin={() => setView("route")} training={() => openTraining("intro")} />}
           {view === "route" && <Route heading={heading} progress={session} begin={enterStation} />}
-          {view === "skip" && <Skip heading={heading} back={home} training={() => openTraining("smart-start")} />}
           {view === "training" && <TrainingInfo heading={heading} active={training.target} back={() => setView(training.from)} />}
 
           {complete && <Finish heading={heading} training={openTraining} home={home} />}
@@ -146,7 +143,7 @@ function App() {
                 {station.stage === "BENCH" && <BenchStation progress={session} submit={action} />}
                 {station.stage === "INVENTORY" && <InventoryScene station={station} progress={session} submit={action} />}
                 <div className="stage-footer">
-                  <SceneButton type="button" className="button quiet training-link" onActivate={() => openTraining("smart-start")}>Smart Start <Icon name="external" size={17} /></SceneButton>
+                  <SceneButton type="button" className="button quiet training-link" onActivate={() => openTraining("intro")}>Занятия с тренером <Icon name="arrow" size={17} /></SceneButton>
                 </div>
               </div>
               {sceneResult && <SceneResult heading={heading} stage={station.stage} next={advance} />}

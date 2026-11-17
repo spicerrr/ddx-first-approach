@@ -1,11 +1,11 @@
 import { lazy, Suspense, useState } from "react";
 import type { Action, Progress, Result } from "../engine/game";
-import { benchAngles, benchGoals, benchNotches, benchParts, type BenchNotch, type BenchPart } from "../engine/scenario";
+import { benchGoals, benchNotches, benchParts, type BenchNotch, type BenchPart } from "../engine/scenario";
 import type { BenchPose } from "./bench-view";
 import { CheckBurst } from "./celebration";
-import { asset, Equipment, Icon } from "./graphics";
+import { asset, Icon } from "./graphics";
 import { SceneButton } from "./scene-button";
-import { CoachMessage } from "./coach-message";
+import { CoachFeedback } from "./coach-message";
 
 const BenchView = lazy(() => import("./bench-view"));
 const lastNotch = benchNotches.length - 1;
@@ -13,36 +13,38 @@ const lastNotch = benchNotches.length - 1;
 const exercises = {
   backrest: {
     title: "Спинка",
-    release: "Отпусти штифт",
-    hold: "Отведи жёлтый штифт и удерживай",
+    switchTo: "К спинке",
+    hold: "Потяни за жёлтый штифт и удерживай.",
+    release: "Теперь можно отпустить штифт.",
+    instruction: "Теперь к скамье. Попробуем менять наклон под упражнение. Начнём со спинки.",
     demo: "Штифт остаётся выдвинутым, пока спинка движется.",
   },
   seat: {
     title: "Сиденье",
-    release: "Отпусти рычаг",
-    hold: "Отведи П-образный рычаг и удерживай",
+    switchTo: "К сиденью",
+    hold: "Отведи П-образный рычаг и удерживай.",
+    release: "Теперь можно отпустить рычаг.",
+    instruction: "Со спинкой получилось. У сиденья свой фиксатор, П-образный рычаг. Попробуем поднять сиденье.",
     demo: "Рычаг остаётся отведённым, пока сиденье движется.",
   },
 };
-
-function targetDegrees(part: BenchPart) {
-  return benchAngles[part][benchGoals[part]];
-}
 
 export function BenchStation({ progress, submit }: { progress: Progress; submit: (action: Action) => Result }) {
   const pending = benchParts.find((item) => !progress.benchAdjustments.includes(item));
   const complete = pending === undefined;
   const [part, setPart] = useState<BenchPart>(pending ?? "seat");
-  const [showDemo, setShowDemo] = useState(!complete);
+  const [showDemo, setShowDemo] = useState(false);
   const [preview, setPreview] = useState<BenchNotch>();
   const [retry, setRetry] = useState(false);
   const [celebrated, setCelebrated] = useState<BenchPart>();
   const exercise = exercises[part];
+  const otherPart = part === "backrest" ? "seat" : "backrest";
   const solved = progress.benchAdjustments.includes(part);
   const waitingForNext = solved && !complete;
   const target = solved ? undefined : benchGoals[part];
   const notch = progress.benchPositions[part];
-  const current = preview ?? notch;
+  const position = preview ?? notch;
+  const direction = target === undefined ? "" : position < target ? "Чуть выше." : position > target ? "Чуть ниже." : "";
 
   const pose: BenchPose = {
     RaiseBackrest: progress.benchPositions.backrest / lastNotch,
@@ -51,10 +53,10 @@ export function BenchStation({ progress, submit }: { progress: Progress; submit:
     ReleaseSeatLatch: 0,
   };
 
-  function choose(nextPart: BenchPart, withDemo = false) {
+  function choose(nextPart: BenchPart) {
     setPart(nextPart);
     setPreview(undefined);
-    setShowDemo(withDemo);
+    setShowDemo(false);
     setRetry(false);
     setCelebrated(undefined);
   }
@@ -69,96 +71,75 @@ export function BenchStation({ progress, submit }: { progress: Progress; submit:
 
   return (
     <section className="bench-station" data-bench-part={part} data-sandbox={complete || undefined}>
-      <CoachMessage visitor={!complete} live>
-        {complete ? "Скамья свободна. Можешь попробовать другие положения или перейти к следующему делу."
-          : `Поможешь настроить скамью для жима? Спинку на ${targetDegrees("backrest")}°, сиденье на ${targetDegrees("seat")}°.`}
-      </CoachMessage>
-      <ol className="bench-orders" aria-label="Настройки посетителя">
-        {benchParts.map((item) => {
-          const done = progress.benchAdjustments.includes(item);
-          const name = exercises[item].title;
-          const order = <><span className="bench-order-mark">{done ? <Icon name="check" size={14} /> : benchParts.indexOf(item) + 1}</span>
-            <span>{name}</span>{!complete && <strong>{targetDegrees(item)}°</strong>}</>;
-          return (
-            <li key={item} data-active={part === item || undefined} data-done={done || undefined}>
-              {complete ? (
-                <SceneButton type="button" aria-pressed={part === item} onActivate={() => choose(item)}>{order}</SceneButton>
-              ) : <div aria-current={part === item ? "step" : undefined}>{order}</div>}
-            </li>
-          );
-        })}
-      </ol>
+      <CoachFeedback message={complete
+        ? "Обе части настроены. Можешь попробовать другие положения или идти дальше."
+        : waitingForNext ? "Спинка зафиксирована. Дальше попробуем настроить сиденье." : exercise.instruction}
+        hint={retry ? "Фиксатор встал на место. Попробуй ещё раз совместить подушку с бирюзовым контуром." : null} />
 
-      <div className="bench-workshop" data-demo={showDemo || undefined} data-retry={retry || undefined}>
+      <div className="bench-workshop">
         <div className="bench-scene">
           <div className="bench-hud" aria-hidden="true">
-            {showDemo ? <span><Icon name="play" size={15} /> Показ приёма</span> : <>
-              <span className="bench-hud-lock"><Icon name="lock" size={15} /> Фиксатор на месте</span>
-              <span className="bench-hud-open"><Icon name="unlock" size={15} /> Фиксатор отведён</span>
-              <span className="bench-hud-ready"><Icon name="check" size={15} /> Положение совпало</span>
-            </>}
+            <span className="bench-hud-rest">{exercise.title}</span>
+            <span className="bench-hud-open"><Icon name="unlock" size={15} /> Фиксатор отведён</span>
+            <span className="bench-hud-ready"><Icon name="check" size={15} /> Положение совпало</span>
           </div>
-          {showDemo ? (
-            <picture className="bench-demo-visual" key={part}>
-              <source media="(prefers-reduced-motion: reduce)" srcSet={asset("bench-" + part + "-still")} />
-              <img src={import.meta.env.BASE_URL + "art/bench-" + part + ".gif"} alt={exercise.demo} width={376} height={223} />
-            </picture>
-          ) : (
-            <Suspense fallback={<div className="bench-view"><Equipment name="bench" alt="Регулируемая скамья" /></div>}>
+          <div inert={showDemo}>
+            <Suspense fallback={<div className="bench-view"><p className="bench-status" role="status">Загружается 3D-модель…</p></div>}>
               <BenchView part={part} pose={pose} notch={notch}
-                target={target} paused={waitingForNext} onPreview={setPreview} onAdjust={adjust} />
+                target={target} paused={waitingForNext || showDemo} onPreview={setPreview} onAdjust={adjust} />
             </Suspense>
-          )}
-          {celebrated === part && <CheckBurst className="bench-achievement" label={complete ? "Скамья настроена" : "Спинка настроена"} />}
-        </div>
-        {!showDemo && (
-          <div className="bench-dial" aria-label={exercise.title + ", наклон " + benchAngles[part][current] + " градусов"}>
-            {benchNotches.map((step) => (
-              <span key={step} data-current={step === current || undefined} data-target={step === target || undefined}>
-                <i aria-hidden="true" />{benchAngles[part][step]}°
-              </span>
-            ))}
           </div>
-        )}
-        {!waitingForNext && (
-          <p className="bench-cue" id="bench-operation">
-            {showDemo ? exercise.demo : <>
-              <span className="bench-cue-rest">
-                {retry ? `Подушка встала на ${benchAngles[part][notch]}°. Можно попробовать ещё раз и совместить её с бирюзовым контуром.` : <>
-                  <span className="bench-touch-help">{exercise.hold}.</span>
-                  <span className="bench-key-help">Удерживай пробел, чтобы отвести фиксатор.</span>
-                </>}
-              </span>
-              <span className="bench-cue-move">
-                <span className="bench-touch-help">{target === undefined ? "Вторым пальцем меняй наклон." : "Вторым пальцем совмести подушку с бирюзовым контуром."}</span>
-                <span className="bench-key-help">Меняй наклон мышью или стрелками.</span>
-              </span>
-              <span className="bench-cue-snap">
-                <span className="bench-touch-help">{exercise.release}.</span>
-                <span className="bench-key-help">Отпусти пробел.</span>
-              </span>
+          <figure id="bench-demo" className="bench-demo" hidden={!showDemo}>
+            {showDemo && <>
+              <picture className="bench-demo-visual">
+                <source media="(prefers-reduced-motion: reduce)" srcSet={asset("bench-" + part + "-still")} />
+                <img src={import.meta.env.BASE_URL + "art/bench-" + part + ".gif"} alt="" width={376} height={223} />
+              </picture>
+              <figcaption>{exercise.demo}</figcaption>
             </>}
+          </figure>
+          {celebrated === part && !showDemo && <CheckBurst className="bench-achievement" label={complete ? "Скамья настроена" : "Спинка настроена"} />}
+        </div>
+        {!waitingForNext && (
+          <p className="bench-cue" id="bench-operation" aria-live="polite">
+            <span className="bench-cue-rest">
+              <span className="bench-touch-help">{exercise.hold}</span>
+              <span className="bench-key-help">Удерживай пробел, чтобы отвести фиксатор.</span>
+            </span>
+            <span className="bench-cue-move">
+              {(preview === undefined || target === undefined) ? <>
+                <span className="bench-touch-help">{target === undefined ? "Вторым пальцем меняй наклон." : "Вторым пальцем совмести подушку с контуром."}</span>
+                <span className="bench-key-help">Меняй наклон мышью или стрелками.</span>
+              </> : direction}
+            </span>
+            <span className="bench-cue-snap">
+              <span className="bench-touch-help">{exercise.release}</span>
+              <span className="bench-key-help">Теперь можно отпустить пробел.</span>
+            </span>
           </p>
         )}
+        <SceneButton type="button" className="button quiet bench-help" onActivate={() => setShowDemo(!showDemo)}
+          aria-expanded={showDemo} aria-controls="bench-demo" onKeyDown={(event) => {
+            if (event.key === "Escape" && showDemo) setShowDemo(false);
+          }}>
+          <Icon name={showDemo ? "close" : "play"} size={18} /> {showDemo ? "Вернуться к модели" : "Показать приём"}
+        </SceneButton>
       </div>
 
       <div className="bench-practice-actions">
-        {showDemo ? (
-          <SceneButton type="button" className="button primary" onActivate={() => setShowDemo(false)}>
-            Попробовать на скамье <Icon name="arrow" size={17} />
-          </SceneButton>
-        ) : waitingForNext ? (
-          <SceneButton type="button" className="button primary" onActivate={() => choose(pending, true)}>
+        {waitingForNext && (
+          <SceneButton type="button" className="button primary" onActivate={() => choose(pending)}>
             К сиденью <Icon name="arrow" size={17} />
           </SceneButton>
-        ) : (
+        )}
+        {complete && (
           <>
-            <SceneButton type="button" className="button ghost" onActivate={() => choose(part, true)}>
-              Показать приём <Icon name="play" size={17} />
+            <SceneButton type="button" className="button ghost" onActivate={() => choose(otherPart)}>
+              {exercises[otherPart].switchTo}
             </SceneButton>
-            {complete && <SceneButton type="button" className="button primary" onActivate={() => submit({ kind: "finish-bench" })}>
+            <SceneButton type="button" className="button primary" onActivate={() => submit({ kind: "finish-bench" })}>
               Следующая станция <Icon name="arrow" size={17} />
-            </SceneButton>}
+            </SceneButton>
           </>
         )}
       </div>

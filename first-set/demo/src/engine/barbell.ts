@@ -50,9 +50,6 @@ export function moveBarbell(assembly: BarbellAssembly, id: string, destination: 
   if (source && assembly.disks[source].at(-1) !== id) {
     return reject("Начни с крайнего диска. Его можно стянуть в лоток.");
   }
-  if (target && assembly.disks[target].length >= barbell.sleeveCapacity) {
-    return reject("На этой втулке уже три диска. Можно собрать тот же вес с более тяжёлыми дисками.");
-  }
 
   const disks = { ...assembly.disks };
   if (source) disks[source] = disks[source].slice(0, -1);

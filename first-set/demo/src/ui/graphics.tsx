@@ -38,7 +38,7 @@ export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{iconPaths[name]}</svg>;
 }
 
-export type ArtName = "dumbbells" | "plate" | "mat" | "band" | "block" | "roller" | "bench";
+export type ArtName = "dumbbells" | "plate" | "mat" | "band" | "block" | "roller";
 const inventoryArt: Record<string, ArtName> = { MAT: "mat", BAND: "band", BLOCK: "block", ROLLER: "roller" };
 
 export function Equipment({ name, className = "", alt = "" }: { name: ArtName; className?: string; alt?: string }) {
