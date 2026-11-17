@@ -1,5 +1,5 @@
-import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
+import { createPortal, preload } from "react-dom";
 import { barbellLayout, diskHint, type BarbellDestination } from "../engine/barbell";
 import type { Action, Progress, Result } from "../engine/game";
 import { barbell, barbellSides, floorId, inventoryPlateWeights, plateRackSlot, rackRows, rackTargets, stationDetails, type BarbellSide, type Station } from "../engine/scenario";
@@ -15,6 +15,7 @@ type Point = { x: number; y: number };
 type Prop = Point & {
   id: string;
   label: string;
+  caption?: string;
   src: string;
   stationary?: boolean;
   size: number;
@@ -40,20 +41,21 @@ type Held = {
 type Drag = Point & { prop: Prop; width: number; over?: string };
 type Feedback = { message: string; kind: "warning" | "guide"; returned?: string };
 
-function InteractionField({ name, props, targets, feedback, setFeedback, onDrop, children }: {
+function InteractionField({ name, props, targets, feedback, setFeedback, onDrop, tapToPlace = false, children }: {
   name: string;
   props: readonly Prop[];
   targets: readonly Target[];
   feedback: Feedback | null;
   setFeedback: (feedback: Feedback | null) => void;
   onDrop: (prop: Prop, destination: string) => Result;
+  tapToPlace?: boolean;
   children: ReactNode;
 }) {
   const field = useRef<HTMLDivElement>(null);
   const start = useRef<Held | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [landed, setLanded] = useState<readonly string[]>([]);
-  const [keyboard, setKeyboard] = useState<Prop | null>(null);
+  const [selected, setSelected] = useState<Prop | null>(null);
 
   function targetAt(event: PointerEvent) {
     const bounds = field.current!.getBoundingClientRect();
@@ -88,7 +90,7 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
       origin: { x: event.clientX, y: event.clientY },
       offset: picked === prop ? { x: event.clientX - rect.left, y: event.clientY - rect.top } : { x: width / 2, y: width / 2 },
     };
-    setKeyboard(null);
+    if (!tapToPlace) setSelected(null);
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
@@ -98,6 +100,7 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
     if (!held.moved) {
       if (Math.hypot(event.clientX - held.origin.x, event.clientY - held.origin.y) < 6) return;
       held.moved = true;
+      setSelected(null);
       setLanded((ids) => ids.filter((id) => id !== held.prop.id));
     }
     setDrag({
@@ -112,7 +115,12 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
     if (!held || held.id !== event.pointerId) return;
     start.current = null;
     setDrag(null);
-    if (!held.moved || cancelled) return;
+    if (cancelled) return;
+    if (!held.moved) {
+      if (tapToPlace && selected?.id === held.prop.id) cancelSelection();
+      else if (tapToPlace) select(held.prop, false);
+      return;
+    }
     const target = targetAt(event);
     if (target) commit(held.prop, target);
   }
@@ -121,24 +129,38 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
     field.current?.querySelector<HTMLElement>('[data-scene-item="' + prop.id + '"]')?.focus({ preventScroll: true });
   }
 
-  function pickWithKeyboard(event: KeyboardEvent, prop: Prop) {
-    if (event.key !== " " && event.key !== "Enter") return;
-    event.preventDefault();
-    setKeyboard(prop);
+  function select(prop: Prop, usingKeyboard: boolean) {
+    setSelected(prop);
     if (feedback?.kind !== "warning") {
-      setFeedback({ kind: "guide", message: "Выбери место клавишей Tab и нажми пробел." });
+      setFeedback({
+        kind: "guide",
+        message: usingKeyboard ? "Выбери место клавишей Tab и нажми пробел." : "Теперь можно нажать на место хранения.",
+      });
     }
-    field.current?.querySelector<HTMLElement>("[data-scene-target]")?.focus({ preventScroll: true });
+    if (usingKeyboard) {
+      field.current?.querySelector<HTMLElement>("[data-scene-target]")?.focus({ preventScroll: true });
+    }
+  }
+
+  function cancelSelection() {
+    if (!selected) return;
+    focusProp(selected);
+    setSelected(null);
+    if (feedback?.kind === "guide") setFeedback(null);
+  }
+
+  function placeSelected(target: string) {
+    if (selected && commit(selected, target).accepted) {
+      focusProp(selected);
+      setSelected(null);
+    }
   }
 
   return (
     <div className={"interaction-field " + name} ref={field}
+      data-tap-ready={tapToPlace && Boolean(selected) || undefined}
       onKeyDown={(event) => {
-        if (event.key === "Escape" && keyboard) {
-          focusProp(keyboard);
-          setKeyboard(null);
-          if (feedback?.kind === "guide") setFeedback(null);
-        }
+        if (event.key === "Escape") cancelSelection();
       }}>
       {children}
       {props.map((prop) => (
@@ -147,7 +169,7 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
           tabIndex={prop.stationary ? undefined : 0}
           data-scene-item={prop.id} data-location={prop.location} data-stationary={prop.stationary || undefined}
           data-held={drag?.prop.id === prop.id ? true : undefined}
-          data-keyboard={keyboard?.id === prop.id ? true : undefined}
+          data-selected={selected?.id === prop.id || undefined}
           data-landed={landed.includes(prop.id) || undefined}
           data-bumped={feedback?.returned === prop.id || undefined}
           data-coaxial={Boolean(prop.mounted) || undefined}
@@ -174,13 +196,18 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
           onPointerUp={(event) => pointerEnd(event, false)}
           onPointerCancel={(event) => pointerEnd(event, true)}
           onLostPointerCapture={(event) => pointerEnd(event, true)}
-          onKeyDown={(event) => pickWithKeyboard(event, prop)}>
+          onKeyDown={(event) => {
+            if (event.key !== " " && event.key !== "Enter") return;
+            event.preventDefault();
+            select(prop, true);
+          }}>
           {prop.mounted?.clamp ? (
             <div className="mounted-art">
               <div className="clamp-sprite" data-closed={prop.mounted.clamp.closed || undefined}
                 style={{ aspectRatio: prop.mounted.clamp.ratio, backgroundImage: "url(" + prop.src + ")" }} />
             </div>
           ) : <img className={prop.mounted ? "mounted-art" : undefined} src={prop.src} alt="" draggable={false} />}
+          {prop.caption && <span className="scene-prop-caption" aria-hidden="true">{prop.caption}</span>}
         </div>
       ))}
       {targets.map((target) => (
@@ -190,13 +217,11 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
           style={{
             left: target.x + "%", top: target.y + "%", width: target.width + "%", height: target.height + "%",
           }}
+          onClick={tapToPlace ? () => placeSelected(target.id) : undefined}
           onKeyDown={(event) => {
-            if (!keyboard || (event.key !== " " && event.key !== "Enter")) return;
+            if (!selected || (event.key !== " " && event.key !== "Enter")) return;
             event.preventDefault();
-            if (commit(keyboard, target.id).accepted) {
-              focusProp(keyboard);
-              setKeyboard(null);
-            }
+            placeSelected(target.id);
           }} />
       ))}
       {drag && createPortal(
@@ -423,63 +448,81 @@ export function BarbellScene({ progress, submit }: Props) {
   );
 }
 
-type StorageSpot = Point & { size: number; anchor?: readonly [number, number] };
+type StorageSpot = Point & { size: number; anchor?: readonly [number, number]; angle?: number };
 type StorageZone = Omit<Target, "id" | "label"> & {
-  kind: "bin" | "hook" | "peg";
+  kind: "shelf" | "hook" | "peg";
   spots: readonly StorageSpot[];
-  tag?: Point;
-  shade?: string;
+  tag: Point & { text: string };
 };
 
-function storageBin(x: number, shade: string): StorageZone {
+type RackFrame = { left: number; top: number; width: number; height: number };
+const plateRack = { left: 5, top: 8, width: 35, height: 45.5 };
+const storageRack = { left: 43, top: 8, width: 55, height: 45.5 };
+
+function rackPoint(frame: RackFrame, x: number, y: number): Point {
+  return { x: frame.left + frame.width * x, y: frame.top + frame.height * y };
+}
+
+function rackStyle(frame: RackFrame): CSSProperties {
+  return { left: frame.left + "%", top: frame.top + "%", width: frame.width + "%", height: frame.height + "%" };
+}
+
+function shelf(level: number, text: string, size: number): StorageZone {
+  const { x, y } = rackPoint(storageRack, .41, level);
   return {
-    kind: "bin", x, y: 90, width: 30, height: 16, shade,
-    spots: [{ x: x - 6.5, y: 92, size: 12.4 }, { x: x + 6.5, y: 92, size: 12.4 }],
+    kind: "shelf", x, y: y - 2.7, width: 38, height: 10.8,
+    tag: { x, y: y + 2.5, text },
+    spots: [.25, .57].map((position) => ({
+      ...rackPoint(storageRack, position, level), size, anchor: [50, 95],
+    })),
   };
 }
 
+// Centers of the exposed pegs in the original 244 × 440 rack cutout.
 const platePegs = [
-  { x: 19, y: 14.6, tag: { x: 10.3, y: 16.4 }, size: 9.6 },
-  { x: 32, y: 11.8, tag: { x: 40.8, y: 13.4 }, size: 10.4 },
-  { x: 19, y: 26.4, tag: { x: 10.3, y: 28.1 }, size: 11 },
-  { x: 32, y: 23, tag: { x: 40.8, y: 24.8 }, size: 11.6 },
-  { x: 19, y: 36.9, tag: { x: 10.3, y: 38.7 }, size: 12.4 },
-];
+  [70, 59, 12.8], [187, 27, 13.6],
+  [70, 186, 14.2], [187, 149, 15],
+  [70, 295, 15.8],
+] as const;
 
 const storage: Record<string, StorageZone> = {
-  MATS: storageBin(17.5, "coral"),
-  BLOCKS: storageBin(50, "surface"),
-  ROLLERS: storageBin(82.5, "light"),
+  MATS: shelf(.314, "Коврики", 15.8),
+  BLOCKS: shelf(.581, "Блоки", 14.6),
+  ROLLERS: shelf(.852, "МФР-роллы", 15),
   BANDS: {
-    kind: "hook", x: 75, y: 20, width: 36, height: 24,
-    spots: [
-      { x: 73.2, y: 15.4, size: 4.6, anchor: [50, 5] },
-      { x: 79.2, y: 14.9, size: 4.6, anchor: [50, 5] },
-    ],
+    kind: "hook", x: 92.2, y: 24.5, width: 14.8, height: 23,
+    tag: { x: 92, y: 13.8, text: "Резинки" },
+    spots: [.846, .957].map((position) => ({
+      ...rackPoint(storageRack, position, .247), size: 4.7, anchor: [50, 8],
+    })),
   },
   ...Object.fromEntries(inventoryPlateWeights.map((weight, index) => {
-    const peg = platePegs[index];
+    const [x, y, size] = platePegs[index];
+    const center = rackPoint(plateRack, x / 244, y / 440);
     return [plateRackSlot(weight), {
-      kind: "peg", x: (peg.x + peg.tag.x) / 2, y: peg.y, width: 20.7, height: 10.4,
-      tag: peg.tag, spots: [{ x: peg.x, y: peg.y, size: peg.size }],
+      kind: "peg", ...center, width: 16.4, height: 10.8,
+      tag: { ...center, text: weight + " кг" }, spots: [{ ...center, size }],
     } satisfies StorageZone];
   })),
 };
 
-const looseInventory = [
-  { x: 13, y: 64, angle: -10, size: 17 },
-  { x: 38, y: 75, angle: 12, size: 15.5 },
-  { x: 63, y: 64, angle: -14, size: 16 },
-  { x: 88, y: 75, angle: 10, size: 16 },
-  { x: 13, y: 75, angle: 10, size: 17 },
-  { x: 38, y: 64, angle: -11, size: 15.5 },
-  { x: 63, y: 75, angle: 11, size: 16 },
-  { x: 88, y: 64, angle: -9, size: 16 },
-  ...[12, 31, 50, 69, 88].map((x) => ({ x, y: 52, size: 12.3 })),
-];
+const looseInventory: Record<string, StorageSpot> = {
+  MAT_1: { x: 13, y: 79.8, angle: -10, size: 20.2 },
+  MAT_2: { x: 63, y: 92.9, angle: 8, size: 20.2 },
+  BAND_1: { x: 63, y: 79.4, angle: -11, size: 19.4 },
+  BAND_2: { x: 13, y: 92.6, angle: 7, size: 19.4 },
+  BLOCK_1: { x: 38, y: 79.8, angle: 7, size: 19 },
+  BLOCK_2: { x: 88, y: 92.8, angle: -8, size: 19 },
+  ROLLER_1: { x: 88, y: 79.6, angle: 6, size: 19.4 },
+  ROLLER_2: { x: 38, y: 92.7, angle: -8, size: 19.4 },
+  ...Object.fromEntries(inventoryPlateWeights.map((weight, index) => [
+    "PLATE_" + weight, { x: 11 + index * 19.5, y: 63.3, size: 15.2 + index * .52 },
+  ])),
+};
 
 export function InventoryScene({ station, progress, submit }: Props & { station: Station }) {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  preload(asset("finish-medal"), { as: "image" });
   const assigned = progress.placements.INVENTORY;
   const zones = station.targets.map((target) => ({
     ...target, ...storage[target.id],
@@ -490,12 +533,13 @@ export function InventoryScene({ station, progress, submit }: Props & { station:
     : lastZone === "BANDS" ? "Резинка на крючке. Посмотри, что ещё осталось на полу."
       : lastZone.startsWith("PLATES_") ? "Диск на своём штыре. Остальные места тоже подписаны по весу."
         : "Предмет на месте. Что ещё осталось убрать?";
-  const props = station.items.map<Prop>((item, index) => {
+  const props = station.items.map<Prop>((item) => {
     const zone = zones.find((zone) => zone.id === assigned[item.id]);
-    const position = zone ? zone.spots[zone.items.indexOf(item.id)] : looseInventory[index];
+    const position = zone ? zone.spots[zone.items.indexOf(item.id)] : looseInventory[item.id];
     return {
       ...position, id: item.id, label: item.label, location: zone?.id ?? floorId,
       src: zone?.kind === "hook" ? asset("inventory-band-hanging") : inventoryAsset(item),
+      caption: !zone && item.weightKg !== undefined ? item.weightKg + " кг" : undefined,
       fitted: Boolean(zone), stationary: Boolean(zone),
     };
   });
@@ -503,20 +547,16 @@ export function InventoryScene({ station, progress, submit }: Props & { station:
     <div className="inventory-board">
       <CoachFeedback hint={feedback?.kind === "warning" ? feedback.message : null}
         message={feedback?.kind === "guide" ? feedback.message : message} />
-      <InteractionField name="storage-floor" props={props} targets={zones} feedback={feedback} setFeedback={setFeedback}
+      <InteractionField name="storage-floor" props={props} targets={zones} feedback={feedback} setFeedback={setFeedback} tapToPlace
         onDrop={(prop, destination) => submit({ kind: "place", stage: "INVENTORY", item: prop.id, destination })}>
-        <img className="storage-rack plate-rack" src={asset("inventory-plate-rack")} draggable={false} alt="" />
-        <img className="storage-rack band-rack" src={asset("inventory-band-rack")} draggable={false} alt="" />
+        <img className="storage-rack plate-rack" style={rackStyle(plateRack)} src={asset("inventory-plate-rack")} draggable={false} alt="" />
+        <img className="storage-rack supply-rack" style={rackStyle(storageRack)} src={asset("inventory-storage-rack")} draggable={false} alt="" />
         <span className="storage-rack-label" data-rack="plates">Диски</span>
-        <span className="storage-rack-label" data-rack="bands">Резинки</span>
-        {zones.map((zone) => zone.kind === "bin" ? (
-          <div className="storage-area" data-shade={zone.shade} data-full={zone.items.length === zone.spots.length || undefined} key={zone.id}
-            style={{ left: zone.x + "%", top: zone.y + "%", width: zone.width + "%", height: zone.height + "%" }}>
-            <span>{zone.label}</span>
-          </div>
-        ) : zone.tag && (
-          <span className="storage-peg-tag" key={zone.id} data-full={zone.items.length > 0 || undefined}
-            style={{ left: zone.tag.x + "%", top: zone.tag.y + "%" }}>{zone.id.split("_")[1]} кг</span>
+        <span className="storage-rack-label" data-rack="shelves">Стеллаж</span>
+        {zones.filter((zone) => zone.kind !== "peg" || zone.items.length === 0).map((zone) => (
+          <span className="storage-slot-label" key={zone.id} data-kind={zone.kind} data-zone={zone.id}
+            data-full={zone.items.length === zone.spots.length || undefined}
+            style={{ left: zone.tag.x + "%", top: zone.tag.y + "%" }}>{zone.tag.text}</span>
         ))}
       </InteractionField>
     </div>

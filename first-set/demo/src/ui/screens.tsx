@@ -83,11 +83,16 @@ export function Finish({ heading, training, home }: {
 }) {
   return (
     <section className="finish">
-      <Confetti />
-      <div>
-        <FinishMedal />
-        <h1 ref={heading} tabIndex={-1}>До встречи в зале</h1>
-        <p className="intro-text">Готово! Хочешь попробовать всё в зале вместе с тренером? Можно начать с ознакомительной тренировки в своём клубе.</p>
+      <div className="finish-hero">
+        <div className="finish-award">
+          <FinishMedal />
+          <Confetti />
+        </div>
+        <p className="finish-score"><Icon name="check" size={15} /> {stations.length} из {stations.length} станций</p>
+        <h1 ref={heading} tabIndex={-1}>Первый подход <span>пройден</span></h1>
+      </div>
+      <div className="finish-next">
+        <p>Хочешь попробовать в зале? На ознакомительном занятии тренер покажет зоны клуба и проведёт пробную тренировку.</p>
         <div className="finish-actions">
           <SceneButton type="button" className="button primary" onActivate={() => training("intro")}>Выбрать занятие с тренером <Icon name="arrow" /></SceneButton>
           <SceneButton type="button" className="button quiet" onActivate={home}>На главный экран</SceneButton>

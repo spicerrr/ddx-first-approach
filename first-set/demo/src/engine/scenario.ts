@@ -28,6 +28,12 @@ export const benchGoals = { backrest: 2, seat: 1 } as const satisfies Record<Ben
 
 export const inventoryPlateWeights = [5, 10, 15, 20, 25] as const;
 export const plateRackSlot = (weightKg: number) => `PLATES_${weightKg}`;
+const inventoryTargetLabels: Readonly<Record<string, string>> = {
+  MATS: "Верхняя полка для ковриков",
+  BLOCKS: "Средняя полка для блоков",
+  ROLLERS: "Нижняя полка для роллов",
+  BANDS: "Боковые крючки для резинок",
+};
 
 const dumbbells = rackWeights.flatMap((weightKg) =>
   ["A", "B"].map((copy) => ({
@@ -75,7 +81,7 @@ export const stations: readonly Station[] = contractStations.map((station) => {
         id: `PLATE_${weightKg}`, label: `Бамперный диск ${weightKg} кг`, weightKg,
       }))],
       targets: [
-        ...station.targets.map((target) => target.id === "BANDS" ? { ...target, label: "Крючки для резинок" } : target),
+        ...station.targets.map((target) => ({ ...target, label: inventoryTargetLabels[target.id] ?? target.label })),
         ...inventoryPlateWeights.map((weightKg) => ({ id: plateRackSlot(weightKg), label: `Место для диска ${weightKg} кг` })),
       ],
     };
@@ -115,7 +121,7 @@ export const stationDetails = {
   INVENTORY: {
     name: "Инвентарь",
     purpose: "Куда вернуть инвентарь после подхода",
-    instruction: "После подхода убираем инвентарь. На стойке диски идут по весу, а резинки можно повесить на крючки.",
+    instruction: "После подхода осталось убрать инвентарь. У дисков своя стойка, у резинок — крючки сбоку стеллажа.",
     lessonTitle: "Проход свободен",
     nextButton: "Завершить игру",
     takeaway: "После подхода верни инвентарь в зоны хранения.",

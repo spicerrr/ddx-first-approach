@@ -37,7 +37,7 @@ for (const width of [320, 375, 402, 430, 768, 1440]) {
       expect(await coach.locator(".coach-avatar").evaluate((el) => {
         const avatar = el as HTMLElement;
         return [avatar.offsetWidth, avatar.offsetHeight];
-      })).toEqual([44, 44]);
+      })).toEqual([56, 56]);
       const heading = page.locator(".game-heading h1");
       const score = page.locator(".stage-score");
       if (name !== "barbell") {

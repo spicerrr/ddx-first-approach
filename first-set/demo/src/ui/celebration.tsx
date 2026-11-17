@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { Icon } from "./graphics";
+import { asset, Icon } from "./graphics";
 
 export function CheckBurst({ label, className = "" }: { label?: string; className?: string }) {
   return (
@@ -14,12 +14,14 @@ export function CheckBurst({ label, className = "" }: { label?: string; classNam
 }
 
 export function FinishMedal() {
-  return <div className="finish-medal" aria-hidden="true">
-    <span><Icon name="check" size={42} /></span>
-  </div>;
+  return (
+    <div className="finish-medal" aria-hidden="true">
+      <img src={asset("finish-medal")} alt="" width={422} height={424} />
+    </div>
+  );
 }
 
-const confettiColors = ["#ff782c", "#06b8c4", "#087c87", "#ffc267", "#75e1e4"];
+const confettiColors = ["#ff782c", "#06c7d5", "#ffeab7", "#ffc267", "#88fffa"];
 
 export function Confetti() {
   return (
@@ -36,8 +38,8 @@ export function Confetti() {
             "--drift": (right ? -1 : 1) * (phase - 13) + "cqw",
             "--spin": (right ? -1 : 1) * (160 + index % 9 * 46) + "deg",
             "--turn": 230 + phase * 5 + "deg",
-            "--delay": index * 29 % 290 + "ms",
-            "--time": 1500 + index * 61 % 980 + "ms",
+            "--delay": 120 + index * 29 % 620 + "ms",
+            "--time": 2700 + index * 61 % 1250 + "ms",
             "--size": (near ? 8 : 4) + index % 3 + "px",
             "--depth": near ? "38px" : "-28px",
           } as CSSProperties} />;

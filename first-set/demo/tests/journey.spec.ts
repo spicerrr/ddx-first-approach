@@ -10,7 +10,7 @@ async function capture(page: Page, info: TestInfo, name: string) {
 }
 
 test("четыре станции, перетаскивание снарядов и замки", async ({ page, isMobile }, info) => {
-  test.setTimeout(80_000);
+  test.setTimeout(95_000);
   const problems: string[] = [];
   page.on("pageerror", (error) => problems.push(error.message));
   page.on("console", (entry) => { if (entry.type() === "error") problems.push(entry.text()); });
@@ -54,7 +54,7 @@ test("четыре станции, перетаскивание снарядов
   await press("К гантелям");
   await expect(itemsOnFloor).toHaveCount(6);
   await expect(avatar.locator("img")).toHaveAttribute("src", /coach-neutral\.webp$/);
-  expect(await avatarSize()).toEqual([44, 44]);
+  expect(await avatarSize()).toEqual([56, 56]);
   await expect(page.locator('.rack-pair[data-shelf="1"]')).toHaveCount(4);
   await expect(page.locator('.rack-pair[data-shelf="2"]')).toHaveCount(4);
   await expect(page.locator(".gym-floor .scene-backdrop")).toHaveAttribute("src", /rack-studio\.webp$/);
@@ -70,7 +70,7 @@ test("четыре станции, перетаскивание снарядов
   await move(["DB_12_A", "RACK_8"]);
   await expect(status).toContainText("Посмотри на соседние пары");
   await expect(status.locator(".coach-message[data-warning] img")).toHaveAttribute("src", /coach-explaining\.webp$/);
-  expect(await avatarSize()).toEqual([44, 44]);
+  expect(await avatarSize()).toEqual([56, 56]);
   await expect(prop(page, "DB_12_A")).toHaveAttribute("data-location", "FLOOR");
   await expect(score(page, 0, 3)).toBeVisible();
   await move(placements.dumbbells[1]);
@@ -210,33 +210,55 @@ test("четыре станции, перетаскивание снарядов
   await expect(score(page, 0, 13)).toBeVisible();
   await expect(page.locator(".storage-floor [data-location='FLOOR']")).toHaveCount(13);
   await expect(page.locator(".plate-rack")).toHaveAttribute("src", /inventory-plate-rack\.webp$/);
-  await expect(page.locator(".band-rack")).toHaveAttribute("src", /inventory-band-rack\.webp$/);
+  const rack = page.locator(".supply-rack");
+  await expect(rack).toHaveAttribute("src", /inventory-storage-rack\.webp$/);
+  await expect(page.locator(".storage-floor [data-location='FLOOR'] .scene-prop-caption")).toHaveCount(5);
+  await expect(page.locator('.storage-slot-label[data-kind="shelf"]')).toHaveCount(3);
   await capture(page, info, "08-inventory");
   await move(["MAT_1", "BANDS"]);
-  await expect(status).toContainText("Стойка ковриков");
+  await expect(status).toContainText("Верхняя полка для ковриков");
   await move(["PLATE_5", "PLATES_10"]);
   await expect(status).toContainText("штырь с отметкой 5 кг");
   await expect(prop(page, "PLATE_5")).toHaveAttribute("data-location", "FLOOR");
   await move(["PLATE_5", "PLATES_5"]);
   await expect(prop(page, "PLATE_5")).toHaveAttribute("data-location", "PLATES_5");
+  await expect(page.locator('.storage-slot-label[data-zone="PLATES_5"]')).toHaveCount(0);
   await expect(status).toContainText("Диск на своём штыре");
   await move(["BAND_1", "BANDS"]);
-  await expect(prop(page, "BAND_1").locator("img")).toHaveAttribute("src", /inventory-band-hanging\.webp$/);
+  const firstBand = prop(page, "BAND_1");
+  await expect(firstBand.locator("img")).toHaveAttribute("src", /inventory-band-hanging\.webp$/);
+  const shelfBounds = (await rack.boundingBox())!;
+  const mountedBounds = (await firstBand.boundingBox())!;
+  expect(mountedBounds.x).toBeGreaterThan(shelfBounds.x + shelfBounds.width * .78);
   await expect(status).toContainText("Резинка на крючке");
   await capture(page, info, "08a-inventory-mounted");
+  const secondBand = prop(page, "BAND_2");
+  if (isMobile) await secondBand.tap();
+  else await secondBand.click();
+  await expect(secondBand).toHaveAttribute("data-selected", "true");
+  if (isMobile) await dropTarget(page, "BANDS").tap();
+  else await dropTarget(page, "BANDS").click();
+  await expect(secondBand).toHaveAttribute("data-location", "BANDS");
+  const completedEarly = ["BAND_1", "BAND_2", "PLATE_5", "ROLLER_2"];
   for (const pair of placements.inventory) {
-    if (pair[0] !== "BAND_1" && pair[0] !== "PLATE_5") await move(pair);
+    if (!completedEarly.includes(pair[0])) await move(pair);
   }
+  await expect(score(page, 12, 13)).toBeVisible();
+  await capture(page, info, "08b-stocked-rack");
+  await move(["ROLLER_2", "ROLLERS"]);
 
   await expect(page.getByRole("dialog", { name: "Проход свободен" })).toBeVisible();
   await press("Завершить игру");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("До встречи в зале");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Первый подход пройден");
+  await expect(page.locator(".finish-score")).toContainText("4 из 4 станций");
+  await expect(page.locator(".finish-medal img")).toHaveAttribute("src", /finish-medal\.webp$/);
   await expect(page.locator(".finish-confetti .confetti-piece")).toHaveCount(60);
   await expect(page.locator(".finish-confetti .confetti-piece").first()).toHaveCSS("animation-name", "confetti-fall");
   await expect.poll(() => page.locator(".confetti-piece").evaluateAll((pieces) =>
     pieces.filter((piece) => Number(getComputedStyle(piece).opacity) > .5).length,
   )).toBeGreaterThan(12);
   await page.screenshot({ path: info.outputPath("09-finish.png"), animations: "allow" });
+  await capture(page, info, "09a-finish-settled");
   await press("Выбрать занятие с тренером");
   await expect(page.getByRole("link").first()).toHaveAttribute("href", "https://www.ddxfitness.ru/group-training/3076/");
   await press("Назад");
