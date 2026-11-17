@@ -9,7 +9,15 @@ const clips = ["RaiseBackrest", "RaiseSeat", "PullBackrestPin", "ReleaseSeatLatc
 export type BenchClip = typeof clips[number];
 export type BenchPose = Record<BenchClip, number>;
 type Control = "latch" | "cushion";
-type Props = { pose: BenchPose; part: BenchPart; notch: BenchNotch; onAdjust: (notch: BenchNotch) => void };
+type Props = {
+  pose: BenchPose;
+  part: BenchPart;
+  notch: BenchNotch;
+  target?: BenchNotch;
+  paused: boolean;
+  onPreview: (notch?: BenchNotch) => void;
+  onAdjust: (notch: BenchNotch) => void;
+};
 type Point = { x: number; y: number };
 
 const controlsByPart = {
@@ -49,6 +57,7 @@ function disposeModel(model: THREE.Object3D) {
 function createViewer(
   host: HTMLDivElement,
   marker: (control: Control) => HTMLButtonElement | null,
+  guide: () => HTMLSpanElement | null,
   props: () => Props,
   setStatus: (status: "ready" | "failed") => void,
 ) {
@@ -120,7 +129,7 @@ function createViewer(
     const part = props().part;
     const target = part === "seat"
       ? new THREE.Vector3(.04, .40, 0)
-      : new THREE.Vector3(-.03, part || props().pose.RaiseBackrest ? .40 : .24, 0);
+      : new THREE.Vector3(-.03, .40, 0);
     const offset = part === "seat"
       ? new THREE.Vector3(1.20, .52, 2.04)
       : new THREE.Vector3(-.52, 1.02, 2.45);
@@ -155,7 +164,8 @@ function createViewer(
 
   function updateMarkers() {
     if (!model || !mixer) return;
-    const controls = controlsByPart[props().part];
+    const { part, target: goal } = props();
+    const controls = controlsByPart[part];
     let latchPoint: Point | undefined;
     for (const kind of ["latch", "cushion"] as const) {
       const button = marker(kind);
@@ -179,6 +189,14 @@ function createViewer(
       applyClip(clip, 1);
       mixer.update(0);
       const end = screenPoint(target);
+      const halo = kind === "cushion" ? guide() : null;
+      if (halo && goal !== undefined) {
+        applyClip(clip, goal / lastNotch);
+        mixer.update(0);
+        const aim = screenPoint(target);
+        halo.style.left = THREE.MathUtils.clamp((aim.x + 1) * width / 2, 25, width - 25) + "px";
+        halo.style.top = THREE.MathUtils.clamp((1 - aim.y) * height / 2, 25, height - 25) + "px";
+      }
       applyClip(clip, displayed[clip]);
       mixer.update(0);
       const vector = new THREE.Vector2((end.x - start.x) * width, (start.y - end.y) * height);
@@ -306,11 +324,13 @@ export default function BenchView(props: Props) {
   const surface = useRef<HTMLDivElement>(null);
   const latch = useRef<HTMLButtonElement>(null);
   const cushion = useRef<HTMLButtonElement>(null);
+  const goalMarker = useRef<HTMLSpanElement>(null);
   const latest = useRef(props);
   const viewer = useRef<ReturnType<typeof createViewer> | null>(null);
   const manipulation = useRef(idle());
   const [status, setStatus] = useState<"loading" | "ready" | "failed">("loading");
   const [unlocked, setUnlocked] = useState(false);
+  const [aligned, setAligned] = useState(false);
   const exercise = controlsByPart[props.part];
 
   useEffect(() => {
@@ -318,7 +338,7 @@ export default function BenchView(props: Props) {
     let instance: ReturnType<typeof createViewer>;
     try {
       instance = createViewer(surface.current, (control) => control === "latch" ? latch.current : cushion.current,
-        () => latest.current, setStatus);
+        () => goalMarker.current, () => latest.current, setStatus);
       viewer.current = instance;
     } catch {
       setStatus("failed");
@@ -340,6 +360,8 @@ export default function BenchView(props: Props) {
       manipulation.current = idle();
       viewer.current?.preview();
       setUnlocked(false);
+      setAligned(false);
+      latest.current.onPreview(undefined);
     }
     cancel();
     window.addEventListener("blur", cancel);
@@ -350,6 +372,9 @@ export default function BenchView(props: Props) {
     const active = manipulation.current;
     viewer.current?.preview({ [exercise.latch.clip]: active.pull, [exercise.cushion.clip]: active.angle });
     setUnlocked(active.pull >= .78);
+    const notch = active.angle === undefined ? undefined : benchNotches[Math.round(active.angle * lastNotch)];
+    setAligned(notch !== undefined && notch === props.target);
+    props.onPreview(notch);
   }
 
   function relock(commit: boolean) {
@@ -357,13 +382,15 @@ export default function BenchView(props: Props) {
     manipulation.current = idle();
     viewer.current?.preview();
     setUnlocked(false);
+    setAligned(false);
+    props.onPreview(undefined);
     if (commit && active.pull >= .78 && active.angle !== undefined) {
       props.onAdjust(benchNotches[Math.round(active.angle * lastNotch)]);
     }
   }
 
   function startDrag(event: PointerEvent<HTMLButtonElement>, control: Control) {
-    if (status === "loading" || event.button !== 0) return;
+    if (status === "loading" || props.paused || event.button !== 0) return;
     const active = manipulation.current;
     if (active[control] || (control === "latch" ? active.keyboard : active.pull < .78)) return;
     const button = event.currentTarget;
@@ -408,6 +435,7 @@ export default function BenchView(props: Props) {
   }
 
   function keyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (props.paused) return;
     const active = manipulation.current;
     if (event.code === "Space") {
       event.preventDefault();
@@ -429,8 +457,8 @@ export default function BenchView(props: Props) {
   }
 
   return (
-    <div className="bench-view" data-model={status} data-unlocked={unlocked || undefined}
-      tabIndex={0} aria-label="Трёхмерная скамья" aria-describedby="bench-operation"
+    <div className="bench-view" data-model={status} data-unlocked={unlocked || undefined} data-aligned={aligned || undefined}
+      tabIndex={0} aria-label="Трёхмерная скамья" aria-describedby={props.paused ? undefined : "bench-operation"}
       onKeyDown={keyDown} onKeyUp={(event) => {
         if (event.code === "Space" && manipulation.current.keyboard) {
           event.preventDefault();
@@ -451,7 +479,8 @@ export default function BenchView(props: Props) {
         <button type="button" className="bench-camera-button" aria-label="Вернуть исходный ракурс"
           title="Вернуть исходный ракурс" onClick={() => viewer.current?.resetView()}><Icon name="rotate" size={20} /></button>
       )}
-      {status !== "loading" && (["latch", "cushion"] as const).map((control) => (
+      {status === "ready" && props.target !== undefined && <span ref={goalMarker} className="bench-goal-marker" aria-hidden="true" />}
+      {status !== "loading" && !props.paused && (["latch", "cushion"] as const).map((control) => (
         <button type="button" className="bench-marker" data-bench-control={control}
           data-active={unlocked || undefined}
           key={control} ref={control === "latch" ? latch : cushion} tabIndex={-1}

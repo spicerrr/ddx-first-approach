@@ -1,100 +1,157 @@
 import { lazy, Suspense, useState } from "react";
 import type { Action, Progress, Result } from "../engine/game";
-import { benchNotches, benchParts, type BenchPart } from "../engine/scenario";
+import { benchAngles, benchGoals, benchNotches, benchParts, type BenchNotch, type BenchPart } from "../engine/scenario";
 import type { BenchPose } from "./bench-view";
 import { CheckBurst } from "./celebration";
 import { asset, Equipment, Icon } from "./graphics";
 import { SceneButton } from "./scene-button";
 
 const BenchView = lazy(() => import("./bench-view"));
+const lastNotch = benchNotches.length - 1;
 
 const exercises = {
   backrest: {
     title: "Спинка",
-    action: "Потяни жёлтый штифт. Удерживая его, измени наклон спинки. Отпусти штифт, чтобы зафиксировать положение.",
-    alt: "Выдвинутый штифт удерживается при подъёме спинки и возвращается при отпускании.",
-    maximum: 30,
+    release: "Отпусти штифт",
+    hold: "Отведи жёлтый штифт и удерживай",
+    demo: "Штифт остаётся выдвинутым, пока спинка движется.",
   },
   seat: {
     title: "Сиденье",
-    action: "Отведи П-образный рычаг под сиденьем. Удерживая рычаг, измени наклон подушки. Отпусти рычаг для фиксации.",
-    alt: "П-образный рычаг остаётся открытым при подъёме сиденья и возвращается при отпускании.",
-    maximum: 12,
+    release: "Отпусти рычаг",
+    hold: "Отведи П-образный рычаг и удерживай",
+    demo: "Рычаг остаётся отведённым, пока сиденье движется.",
   },
 };
 
-type Demo = { part: BenchPart; firstVisit: boolean };
-const demoSource = (part: BenchPart) => import.meta.env.BASE_URL + "art/bench-" + part + ".gif";
-const lastNotch = benchNotches.length - 1;
+function targetDegrees(part: BenchPart) {
+  return benchAngles[part][benchGoals[part]];
+}
 
 export function BenchStation({ progress, submit }: { progress: Progress; submit: (action: Action) => Result }) {
-  const [part, setPart] = useState<BenchPart>(() => progress.benchAdjustments.includes("backrest") ? "seat" : "backrest");
-  const [demo, setDemo] = useState<Demo | null>(() => progress.benchAdjustments.length ? null : { part: "backrest", firstVisit: true });
-  const complete = benchParts.every((item) => progress.benchAdjustments.includes(item));
+  const pending = benchParts.find((item) => !progress.benchAdjustments.includes(item));
+  const complete = pending === undefined;
+  const [part, setPart] = useState<BenchPart>(pending ?? "seat");
+  const [showDemo, setShowDemo] = useState(!complete);
+  const [preview, setPreview] = useState<BenchNotch>();
+  const [retry, setRetry] = useState(false);
+  const [celebrated, setCelebrated] = useState<BenchPart>();
+  const exercise = exercises[part];
+  const solved = progress.benchAdjustments.includes(part);
+  const waitingForNext = solved && !complete;
+  const target = solved ? undefined : benchGoals[part];
+  const notch = progress.benchPositions[part];
+  const current = preview ?? notch;
 
-  if (demo) {
-    const exercise = exercises[demo.part];
-    const nextDemo = demo.firstVisit && demo.part === "backrest";
-    return (
-      <section className="bench-station bench-demo" aria-labelledby="bench-demo-title">
-        <picture className="bench-demo-visual" key={demo.part}>
-          <source media="(prefers-reduced-motion: reduce)" srcSet={asset("bench-" + demo.part + "-still")} />
-          <img src={demoSource(demo.part)} alt={exercise.alt} width={376} height={223} />
-        </picture>
-        <div className="bench-lesson-copy">
-          <h2 id="bench-demo-title">{exercise.title}</h2>
-          <p>{exercise.action}</p>
-        </div>
-        <SceneButton type="button" className="button primary" onActivate={() => {
-          if (nextDemo) setDemo({ part: "seat", firstVisit: true });
-          else setDemo(null);
-        }}>
-          {nextDemo ? "Посмотреть сиденье" : "Попробовать на скамье"} <Icon name="arrow" size={17} />
-        </SceneButton>
-      </section>
-    );
-  }
-
-  const { backrest, seat } = progress.benchPositions;
   const pose: BenchPose = {
-    RaiseBackrest: backrest / lastNotch,
-    RaiseSeat: seat / lastNotch,
+    RaiseBackrest: progress.benchPositions.backrest / lastNotch,
+    RaiseSeat: progress.benchPositions.seat / lastNotch,
     PullBackrestPin: 0,
     ReleaseSeatLatch: 0,
   };
 
+  function choose(nextPart: BenchPart, withDemo = false) {
+    setPart(nextPart);
+    setPreview(undefined);
+    setShowDemo(withDemo);
+    setRetry(false);
+    setCelebrated(undefined);
+  }
+
+  function adjust(next: BenchNotch) {
+    const result = submit({ kind: "bench-adjustment", part, notch: next });
+    if (target === undefined) return;
+    const matched = result.progress.benchAdjustments.includes(part);
+    setRetry(!matched && next !== notch);
+    if (matched) setCelebrated(part);
+  }
+
   return (
-    <section className="bench-station bench-practice" data-bench-part={part} data-sandbox={complete || undefined}>
-      <div className="bench-parts" aria-label="Подушки скамьи">
-        {benchParts.map((item) => (
-          <SceneButton key={item} type="button" aria-pressed={part === item} onActivate={() => setPart(item)}>
-            {progress.benchAdjustments.includes(item) && <Icon name="check" size={16} />}
-            {exercises[item].title}
-          </SceneButton>
-        ))}
+    <section className="bench-station" data-bench-part={part} data-sandbox={complete || undefined}>
+      <div className="bench-visitor">
+        <span className="visitor-icon"><Icon name="person" size={19} /></span>
+        <p>«Поможешь настроить скамью? Спинку на {targetDegrees("backrest")}°, сиденье на {targetDegrees("seat")}°».</p>
       </div>
-      <div className="play-scene scene-bench">
-        <Suspense fallback={<div className="bench-view"><Equipment name="bench" alt="Регулируемая скамья" /></div>}>
-          <BenchView part={part} pose={pose} notch={progress.benchPositions[part]}
-            onAdjust={(notch) => submit({ kind: "bench-adjustment", part, notch })} />
-        </Suspense>
-        {complete && <CheckBurst className="bench-achievement" label="Обе подушки отрегулированы" />}
+      <ol className="bench-orders" aria-label="Настройки посетителя">
+        {benchParts.map((item) => {
+          const done = progress.benchAdjustments.includes(item);
+          const name = exercises[item].title;
+          const order = <>{done && <Icon name="check" size={15} />}<span>{name}</span>{!complete && <strong>{targetDegrees(item)}°</strong>}</>;
+          return (
+            <li key={item} data-active={part === item || undefined} data-done={done || undefined}>
+              {complete ? (
+                <SceneButton type="button" aria-pressed={part === item} onActivate={() => choose(item)}>{order}</SceneButton>
+              ) : <div aria-current={part === item ? "step" : undefined}>{order}</div>}
+            </li>
+          );
+        })}
+      </ol>
+
+      <div className="bench-workshop" data-demo={showDemo || undefined} data-retry={retry || undefined}>
+        <div className="bench-scene">
+          {showDemo ? (
+            <picture className="bench-demo-visual" key={part}>
+              <source media="(prefers-reduced-motion: reduce)" srcSet={asset("bench-" + part + "-still")} />
+              <img src={import.meta.env.BASE_URL + "art/bench-" + part + ".gif"} alt={exercise.demo} width={376} height={223} />
+            </picture>
+          ) : (
+            <Suspense fallback={<div className="bench-view"><Equipment name="bench" alt="Регулируемая скамья" /></div>}>
+              <BenchView part={part} pose={pose} notch={notch}
+                target={target} paused={waitingForNext} onPreview={setPreview} onAdjust={adjust} />
+            </Suspense>
+          )}
+          {celebrated === part && <CheckBurst className="bench-achievement" label={complete ? "Скамья настроена" : "Спинка настроена"} />}
+        </div>
+        {!showDemo && (
+          <div className="bench-dial" aria-label={exercise.title + ", наклон " + benchAngles[part][current] + " градусов"}>
+            {benchNotches.map((step) => (
+              <span key={step} data-current={step === current || undefined} data-target={step === target || undefined}>
+                <i aria-hidden="true" />{benchAngles[part][step]}°
+              </span>
+            ))}
+          </div>
+        )}
+        {!waitingForNext && (
+          <p className="bench-cue" id="bench-operation">
+            {showDemo ? exercise.demo : <>
+              <span className="bench-cue-rest">
+                {retry ? "Подвинь подушку к бирюзовой отметке и отпусти фиксатор." : <>
+                  <span className="bench-touch-help">{exercise.hold}.</span>
+                  <span className="bench-key-help">Удерживай пробел, чтобы отвести фиксатор.</span>
+                </>}
+              </span>
+              <span className="bench-cue-move">
+                <span className="bench-touch-help">{target === undefined ? "Вторым пальцем меняй наклон." : "Вторым пальцем веди подушку к бирюзовой отметке."}</span>
+                <span className="bench-key-help">Меняй наклон мышью или стрелками.</span>
+              </span>
+              <span className="bench-cue-snap">
+                <span className="bench-touch-help">{exercise.release}.</span>
+                <span className="bench-key-help">Отпусти пробел.</span>
+              </span>
+            </>}
+          </p>
+        )}
       </div>
-      <div className="bench-angle" role="status" aria-live="polite">
-        <span>{exercises[part].title}</span>
-        <strong>{progress.benchPositions[part] * exercises[part].maximum / lastNotch}°</strong>
-      </div>
-      <p className="bench-operation" id="bench-operation">
-        <span className="bench-touch-help">Отведи фиксатор одним пальцем и удерживай. Другим пальцем перетащи подушку, затем отпусти фиксатор.</span>
-        <span className="bench-key-help">Удерживай пробел и перетащи подушку мышью или меняй угол стрелками. Отпусти пробел для фиксации.</span>
-      </p>
+
       <div className="bench-practice-actions">
-        <SceneButton type="button" className="button ghost" onActivate={() => setDemo({ part, firstVisit: false })}>
-          Показать приём <Icon name="play" size={17} />
-        </SceneButton>
-        {complete && <SceneButton type="button" className="button primary" onActivate={() => submit({ kind: "finish-bench" })}>
-          Следующая станция <Icon name="arrow" size={17} />
-        </SceneButton>}
+        {showDemo ? (
+          <SceneButton type="button" className="button primary" onActivate={() => setShowDemo(false)}>
+            Попробовать на скамье <Icon name="arrow" size={17} />
+          </SceneButton>
+        ) : waitingForNext ? (
+          <SceneButton type="button" className="button primary" onActivate={() => choose(pending, true)}>
+            К сиденью <Icon name="arrow" size={17} />
+          </SceneButton>
+        ) : (
+          <>
+            <SceneButton type="button" className="button ghost" onActivate={() => choose(part, true)}>
+              Показать приём <Icon name="play" size={17} />
+            </SceneButton>
+            {complete && <SceneButton type="button" className="button primary" onActivate={() => submit({ kind: "finish-bench" })}>
+              Следующая станция <Icon name="arrow" size={17} />
+            </SceneButton>}
+          </>
+        )}
       </div>
     </section>
   );

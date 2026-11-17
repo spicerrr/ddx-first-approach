@@ -12,6 +12,7 @@ const finishBench = { kind: "finish-bench" };
 const toggle = (side) => ({ kind: "toggle-collar", side });
 const check = { kind: "check-barbell" };
 const closeBarbell = [move("LOCK_A", "LEFT"), move("LOCK_B", "RIGHT"), toggle("LEFT"), toggle("RIGHT"), check];
+const twenties = [move("DISK_20_A", "LEFT"), move("DISK_20_B", "RIGHT")];
 const tens = [move("DISK_10_A", "LEFT"), move("DISK_10_B", "RIGHT")];
 const fives = [
   move("DISK_5_A", "LEFT"), move("DISK_5_B", "LEFT"),
@@ -23,8 +24,8 @@ const actions = [
     dumbbell("DB_12_A", "RACK_12"), dumbbell("DB_12_B", "RACK_12"),
     dumbbell("DB_16_A", "RACK_16"), dumbbell("DB_16_B", "RACK_16"),
   ],
-  [...tens, ...closeBarbell],
-  [adjust("backrest"), adjust("seat"), finishBench],
+  [...twenties, ...tens, ...closeBarbell],
+  [adjust("backrest"), adjust("seat", 1), finishBench],
   [
     place("INVENTORY", "MAT_1", "MATS"), place("INVENTORY", "MAT_2", "MATS"),
     place("INVENTORY", "BAND_1", "BANDS"), place("INVENTORY", "BAND_2", "BANDS"),
@@ -83,7 +84,8 @@ describe("Один игровой маршрут", () => {
     expect(older.phase).toBe("lesson");
     const fresh = newProgress();
     expect(fresh.placements).toEqual({ DUMBBELLS: {}, INVENTORY: {} });
-    expect(barbellLayout(fresh.barbell)).toMatchObject({ totalKg: 60, collarCount: 0 });
+    expect(barbellLayout(fresh.barbell)).toMatchObject({ totalKg: 20, leftKg: 0, rightKg: 0, collarCount: 0 });
+    expect(fresh.barbell.disks).toEqual({ LEFT: [], RIGHT: [] });
     expect(fresh.events).toEqual([]);
     reject(fresh, actions[0][0]);
     expect(start(start(fresh, at), at).events).toHaveLength(1);
@@ -97,8 +99,8 @@ describe("Один игровой маршрут", () => {
     ]);
     const state = accept(atStation(0), dumbbell("DB_8_A", "RACK_8"));
     expect(stationProgress(state, stations[0])).toBe(0);
-    reject(state, dumbbell("DB_12_A", "RACK_8"), "8 кг");
-    reject(state, dumbbell("DB_8_B", "RACK_16"), "16 кг");
+    reject(state, dumbbell("DB_12_A", "RACK_8"), "Сравни веса соседних");
+    reject(state, dumbbell("DB_8_B", "RACK_16"), "Сравни веса соседних");
     const paired = accept(state, dumbbell("DB_8_B", "RACK_8"));
     expect(stationProgress(paired, stations[0])).toBe(1);
     const returned = accept(paired, dumbbell("DB_8_A", floorId));
@@ -108,8 +110,8 @@ describe("Один игровой маршрут", () => {
 
   it("различает недовес, перевес, разницу масс и разницу наборов", () => {
     const initial = atStation(1);
-    expect(barbellLayout(initial.barbell)).toMatchObject({ totalKg: 60, leftKg: 20, rightKg: 20 });
-    const under = [tens[0], move("DISK_5_A", "RIGHT")].reduce(accept, initial);
+    expect(barbellLayout(initial.barbell)).toMatchObject({ totalKg: 20, leftKg: 0, rightKg: 0 });
+    const under = [...twenties, tens[0], move("DISK_5_A", "RIGHT")].reduce(accept, initial);
     expect(barbellLayout(under.barbell).totalKg).toBe(75);
     reject(under, check, "До цели не хватает 5 кг.");
     const mixed = accept(under, move("DISK_5_B", "RIGHT"));
@@ -124,7 +126,7 @@ describe("Один игровой маршрут", () => {
 
   it("зачитывает два симметричных решения только с замком на каждой втулке", () => {
     for (const sequence of [tens, fives]) {
-      const prepared = sequence.reduce(accept, atStation(1));
+      const prepared = [...twenties, ...sequence].reduce(accept, atStation(1));
       reject(prepared, check, "по замку");
       const a = accept(prepared, move("LOCK_A", "RIGHT"));
       reject(a, check, "по замку");
@@ -139,9 +141,9 @@ describe("Один игровой маршрут", () => {
     }
   });
 
-  it("снимает замок и внешний диск, позволяет снять стартовый диск и переставить его", () => {
+  it("снимает замок и внешний диск, позволяет переставить диск на другую сторону", () => {
     const initial = atStation(1);
-    const assembled = [tens[0], move("LOCK_A", "LEFT")].reduce(accept, initial);
+    const assembled = [...twenties, tens[0], move("LOCK_A", "LEFT")].reduce(accept, initial);
     reject(assembled, move("DISK_10_A", floorId), "сдвинь замок");
     reject(assembled, move("DISK_5_B", "LEFT"), "сдвинь замок");
     const closed = accept(assembled, toggle("LEFT"));
@@ -158,14 +160,19 @@ describe("Один игровой маршрут", () => {
     expect(accept(full, move("LOCK_B", "RIGHT")).barbell.collars.RIGHT).toBe("LOCK_B");
   });
 
-  it("сохраняет песочницу после двух регулировок и ждёт ручного перехода", () => {
+  it("проверяет углы посетителя до песочницы и ждёт ручного перехода", () => {
     const state = atStation(2);
     reject(state, finishBench, "Отрегулируй спинку и сиденье");
     reject(state, adjust("seat", 4), "Выбери положение");
-    const seated = accept(state, adjust("seat", 1));
-    reject(seated, adjust("seat", 1));
-    reject(seated, finishBench);
-    const practiced = accept(seated, adjust("backrest", 3));
+    reject(state, adjust("seat", 1), "текущую настройку");
+    const wrong = accept(state, adjust("backrest", 1));
+    expect(wrong.benchPositions.backrest).toBe(1);
+    expect(stationProgress(wrong, stations[2])).toBe(0);
+    reject(wrong, finishBench);
+    const raised = accept(wrong, adjust("backrest", 2));
+    reject(raised, adjust("backrest", 3), "текущую настройку");
+    reject(raised, finishBench);
+    const practiced = accept(raised, adjust("seat", 1));
     expect(practiced.stageIndex).toBe(2);
     expect(practiced.phase).toBe("playing");
     const lowered = accept(practiced, adjust("backrest", 0));

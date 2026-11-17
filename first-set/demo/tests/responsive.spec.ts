@@ -21,8 +21,9 @@ for (const width of [320, 375, 402, 430, 768, 1440]) {
       expect(controls).toBe(true);
       if (name === "bench") {
         await openBench(page);
-        await keyboardBench(page);
-        await button(page, "Сиденье").click();
+        await keyboardBench(page, 2);
+        await button(page, "К сиденью").click();
+        await openBench(page);
         await keyboardBench(page);
       } else {
         for (const pair of placements[name as keyof typeof placements]) await keyboardPlace(page, pair);

@@ -1,5 +1,5 @@
 import { checkBarbell, moveBarbell, newAssembly, toggleCollar, type BarbellAssembly, type BarbellDestination } from "./barbell";
-import { benchNotches, benchParts, floorId, inventoryDestination, lastStation, rackTargets, stations, stationTotal,
+import { benchGoals, benchNotches, benchParts, floorId, inventoryDestination, lastStation, rackTargets, stations, stationTotal,
   type BarbellSide, type BenchNotch, type BenchPart, type Station, type StationId } from "./scenario";
 
 export type Phase = "ready" | "playing" | "lesson" | "complete";
@@ -101,13 +101,15 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
     if (station.stage !== "BENCH" || !benchParts.includes(action.part) || !benchNotches.includes(action.notch)) {
       return reject("Выбери положение подушки на скамье.");
     }
+    const pending = benchParts.find((part) => !progress.benchAdjustments.includes(part));
+    if (pending && action.part !== pending) return reject("Выполни текущую настройку.");
     if (progress.benchPositions[action.part] === action.notch) return reject("");
     return accept({
       ...progress,
       benchPositions: { ...progress.benchPositions, [action.part]: action.notch },
-      benchAdjustments: progress.benchAdjustments.includes(action.part)
-        ? progress.benchAdjustments
-        : [...progress.benchAdjustments, action.part],
+      benchAdjustments: pending && action.notch === benchGoals[pending]
+        ? [...progress.benchAdjustments, pending]
+        : progress.benchAdjustments,
     }, "");
   }
 
@@ -136,7 +138,7 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
     } else {
       const pocket = rackTargets.find(({ id }) => id === target.id);
       if (pocket?.weightKg !== item.weightKg) {
-        return reject(`Это место для пары ${pocket?.weightKg} кг. Найди на стойке отметку ${item.weightKg} кг.`);
+        return reject("Эта пара сюда не подходит. Сравни веса соседних гантелей.");
       }
       assigned[item.id] = target.id;
     }

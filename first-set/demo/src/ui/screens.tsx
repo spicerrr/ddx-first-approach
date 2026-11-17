@@ -1,7 +1,7 @@
 import type { Ref } from "react";
 import { stationDetails, stations, type StationId } from "../engine/scenario";
 import type { Progress } from "../engine/game";
-import { Equipment, Icon, sceneAsset, type ArtName, type IconName } from "./graphics";
+import { asset, Equipment, Icon, sceneAsset, type ArtName, type IconName } from "./graphics";
 import { SceneButton } from "./scene-button";
 import { CheckBurst, Confetti } from "./celebration";
 
@@ -52,7 +52,7 @@ export function Route({ heading, progress, begin }: { heading: Heading; progress
               <span>{completed ? "Пройдено" : current ? "Можно начать" : "После предыдущей станции"}</span>
             </div>
             {stage === "DUMBBELLS" || stage === "BARBELL"
-              ? <img className="equipment route-prop" src={sceneAsset(stage === "DUMBBELLS" ? "dumbbell-12" : "disk-10")} alt="" />
+              ? <img className="equipment route-prop" src={asset(stage === "DUMBBELLS" ? "dumbbell-floor-12" : "bar-tray-10")} alt="" />
               : <Equipment name={stationArt[stage]} />}
           </li>;
         })}

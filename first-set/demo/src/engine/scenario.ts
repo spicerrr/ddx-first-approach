@@ -16,7 +16,7 @@ export const rackRows = [[2, 4, 6, 8], [10, 12, 14, 16]] as const;
 const rackWeights = [8, 12, 16];
 export const rackTargets = rackRows.flatMap((row, shelf) => Array.from(row).flatMap((weightKg, pair) =>
   rackWeights.includes(weightKg) ? [{
-    id: `RACK_${weightKg}`, label: `Пара ${weightKg} кг на ${shelf === 0 ? "верхней" : "нижней"} полке`, weightKg, shelf, pair,
+    id: `RACK_${weightKg}`, label: `${shelf === 0 ? "Верхняя" : "Нижняя"} полка, пара ${pair + 1}`, weightKg, shelf, pair,
   }] : [],
 ));
 
@@ -24,6 +24,8 @@ export const benchParts = ["backrest", "seat"] as const;
 export type BenchPart = typeof benchParts[number];
 export const benchNotches = [0, 1, 2, 3] as const;
 export type BenchNotch = typeof benchNotches[number];
+export const benchAngles = { backrest: [0, 10, 20, 30], seat: [0, 4, 8, 12] } as const;
+export const benchGoals = { backrest: 2, seat: 1 } as const satisfies Record<BenchPart, BenchNotch>;
 
 const dumbbells = rackWeights.flatMap((weightKg) =>
   ["A", "B"].map((copy) => ({
@@ -78,19 +80,19 @@ export const stationTotal = (station: Station) => {
 export const stationDetails = {
   DUMBBELLS: {
     name: "Гантели",
-    instruction: "Наверху стоят лёгкие гантели, внизу — тяжёлые. На каждой полке вес растёт слева направо. Верни три пары на свои места.",
+    instruction: "Верни три пары на стойку. Лёгкие гантели стоят сверху, тяжёлые снизу. На обеих полках вес растёт слева направо.",
     lessonTitle: "Гантели на месте",
     takeaway: "Лёгкие пары ставь выше, тяжёлые ниже. На каждой полке вес растёт слева направо.",
   },
   BARBELL: {
     name: "Штанга",
-    instruction: `В зале часто работают со свободными весами. Давай соберём штангу на ${barbell.targetKg} кг. Надень одинаковые диски с двух сторон и защёлкни замки.`,
+    instruction: `Собери штангу на ${barbell.targetKg} кг. Учитывай вес пустого грифа. Надень одинаковые диски с обеих сторон и защёлкни замки.`,
     lessonTitle: "Штанга собрана",
     takeaway: "Сверяй состав дисков с обеих сторон грифа и ставь замки.",
   },
   BENCH: {
     name: "Скамья",
-    instruction: "Посмотри, как удерживать фиксатор и менять наклон. Затем попробуй регулировку на модели.",
+    instruction: "Посетитель готовится к жиму. Помоги выставить нужный наклон.",
     lessonTitle: "Скамья готова",
     takeaway: "Удерживай фиксатор, меняя наклон. В новом положении отпусти его и проверь фиксацию подушки.",
   },

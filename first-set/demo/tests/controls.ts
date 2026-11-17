@@ -11,6 +11,7 @@ export const placements = {
     ["DB_16_A", "RACK_16"], ["DB_16_B", "RACK_16"],
   ],
   barbell: [
+    ["DISK_20_A", "LEFT"], ["DISK_20_B", "RIGHT"],
     ["DISK_10_A", "LEFT"], ["DISK_10_B", "RIGHT"],
     ["LOCK_A", "LEFT"], ["LOCK_B", "RIGHT"],
   ],
@@ -76,15 +77,14 @@ export async function noOverflow(page: Page) {
 }
 
 export async function openBench(page: Page, touch = false) {
-  await activate(page, "Посмотреть сиденье", touch);
   await activate(page, "Попробовать на скамье", touch);
   await expect(page.locator(".bench-view")).toHaveAttribute("data-model", "ready");
 }
 
-export async function keyboardBench(page: Page, direction = "ArrowUp") {
+export async function keyboardBench(page: Page, notches = 1) {
   await page.locator(".bench-view").focus();
   await page.keyboard.down("Space");
-  await page.keyboard.press(direction);
+  for (let index = 0; index < notches; index++) await page.keyboard.press("ArrowUp");
   await page.keyboard.up("Space");
 }
 
