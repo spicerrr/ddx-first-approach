@@ -1,0 +1,23 @@
+name: Diagnose touch interactions
+on:
+  push:
+    branches: [first-approach-touch-check]
+permissions:
+  contents: read
+jobs:
+  touch:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: first-set/demo
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: first-set/demo/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps --only-shell chromium
+      - run: npx playwright test tests/journey.spec.ts --project touch
