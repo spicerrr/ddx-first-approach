@@ -81,13 +81,13 @@ function App() {
       ) : (
         <header className="site-header">
           <div className="shell header-inner">
-            <button type="button" className="wordmark" onClick={home} aria-label="Первый подход — главная">
+            <SceneButton type="button" className="wordmark" onActivate={home} aria-label="Первый подход — главная">
               <strong>DDX</strong><span>FITNESS</span>
-            </button>
+            </SceneButton>
             {(view === "route" || view === "briefing") &&
-              <button type="button" className="button quiet scene-close" onClick={home} aria-label="Выйти"><Icon name="close" size={22} /></button>}
+              <SceneButton type="button" className="button quiet scene-close" onActivate={home} aria-label="Выйти"><Icon name="close" size={22} /></SceneButton>}
             {(view === "home" || view === "skip") &&
-              <button type="button" className="button quiet training-link" onClick={() => openTraining("smart-start")}>Smart Start <Icon name="external" size={17} /></button>}
+              <SceneButton type="button" className="button quiet training-link" onActivate={() => openTraining("smart-start")}>Smart Start <Icon name="external" size={17} /></SceneButton>}
           </div>
         </header>
       )}
