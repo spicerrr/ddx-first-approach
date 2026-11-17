@@ -52,7 +52,7 @@ export function ClubNavigation({ tab, go, training }: { tab: ClubTab; go: (tab: 
 function ApproachCard({ begin }: { begin: () => void }) {
   return (
     <article className="onboarding-card" aria-labelledby="approach-title" id="club-approach">
-      <img className="approach-photo" src={asset("coach-avatar-ddx")} alt="" width={640} height={800} fetchPriority="high" />
+      <img className="approach-photo" src={asset("coach-avatar-blue")} alt="" width={640} height={800} fetchPriority="high" />
       <div className="approach-copy">
         <h2 id="approach-title">Первый<br />подход</h2>
         <p>Интерактивное знакомство с залом</p>
@@ -139,7 +139,7 @@ export function Home({ heading, begin, training, calendar }: {
           <img src={sceneAsset("dumbbell-12")} alt="" /><span>Первый визит<br />в зал</span>
         </SceneButton>
         <SceneButton type="button" className="club-story story-coach" onActivate={() => training("intro")}>
-          <img src={asset("coach-avatar-ddx")} alt="" /><span>Знакомство<br />с тренером</span>
+          <img src={asset("coach-avatar-blue")} alt="" /><span>Знакомство<br />с тренером</span>
         </SceneButton>
       </section>
       <div ref={offer}><ApproachCard begin={begin} /></div>

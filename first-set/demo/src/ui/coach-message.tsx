@@ -7,7 +7,7 @@ export function CoachMessage({ children, visitor = false, live = false, classNam
   return (
     <div className={("coach-message " + className).trim()} data-visitor={visitor || undefined}>
       <span className="coach-avatar" aria-hidden="true">
-        {visitor ? <Icon name="person" size={19} /> : <img src={asset("coach-avatar-ddx")} alt="" />}
+        {visitor ? <Icon name="person" size={19} /> : <img src={asset("coach-avatar-blue")} alt="" />}
       </span>
       <div>
         <strong>{visitor ? "Посетитель" : "Тренер"}</strong>

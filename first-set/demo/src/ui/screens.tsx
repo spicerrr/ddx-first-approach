@@ -23,7 +23,7 @@ export function ShiftCover({ heading, begin, skip }: { heading: Heading; begin: 
           <p>Твоя первая смена</p>
           <h1 ref={heading} tabIndex={-1}>Первый подход</h1>
         </div>
-        <img src={asset("coach-avatar-ddx")} alt="" width={640} height={800} fetchPriority="high" />
+        <img src={asset("coach-avatar-blue")} alt="" width={640} height={800} fetchPriority="high" />
       </div>
       <p className="shift-cover-intro">Привет! Я тренер клуба. Хочешь пройтись по залу и попробовать, как здесь всё устроено?</p>
       <div className="shift-cover-actions">
