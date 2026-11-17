@@ -395,8 +395,11 @@ h1:focus { outline: 0; }
 .scene-prop[data-held] { opacity: .2; cursor: grabbing; }
 .scene-prop[data-stationary] { pointer-events: none; }
 .scene-prop:focus-visible, .scene-prop[data-keyboard] { outline: 2px solid var(--aqua); outline-offset: 3px; border-radius: 6px; }
+.scene-prop[data-clamp] { transform: none; }
+/* Keep the collar in visual depth order and its touch area in front of the disc it blocks. */
+.scene-prop[data-clamp] .mounted-art { position: relative; z-index: var(--clamp-art-layer); }
 .scene-prop[data-clamp]::before {
-  content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px;
+  content: ""; position: absolute; z-index: 165; left: 50%; top: 50%; width: 44px; height: 44px;
   transform: translate(-50%, -50%);
 }
 
