@@ -17,7 +17,7 @@ function App() {
   const [session, setSession] = useState(newProgress);
   const [view, setView] = useState<View>("home");
   const [entryTab, setEntryTab] = useState<ClubTab>("home");
-  const [training, setTraining] = useState<{ target: Training; from: EntryView }>({ target: "smart-start", from: "home" });
+  const [training, setTraining] = useState<{ target: Training; from: ClubTab | "cover" }>({ target: "smart-start", from: "home" });
   const preview = useRef<HTMLDivElement>(null);
   const screen = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -59,6 +59,7 @@ function App() {
   }
 
   function begin(from: ClubTab) {
+    setSession(newProgress());
     setEntryTab(from);
     setView("cover");
   }
@@ -70,7 +71,9 @@ function App() {
 
   function openTraining(target: Training) {
     if (view === "training") return;
-    setTraining({ target, from: view });
+    const leavingGame = view === "play" || view === "route";
+    if (leavingGame) setSession(newProgress());
+    setTraining({ target, from: leavingGame ? entryTab : view });
     setView("training");
   }
 

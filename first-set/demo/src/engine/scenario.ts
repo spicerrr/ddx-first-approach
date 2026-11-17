@@ -59,7 +59,7 @@ export const barbell = {
 
 export const stations: readonly Station[] = contractStations.map((station) => {
   switch (station.stage) {
-    case "DUMBBELLS": return { ...station, title: "Стойка с гантелями", items: dumbbells, targets: rackTargets };
+    case "DUMBBELLS": return { ...station, title: "Гантели", items: dumbbells, targets: rackTargets };
     case "BARBELL": return { ...station, title: "Штанга", items: barbell.props };
     case "BENCH": return {
       ...station, title: "Скамья",
@@ -79,28 +79,32 @@ export const stationDetails = {
   DUMBBELLS: {
     name: "Гантели",
     purpose: "Где искать нужный вес",
-    instruction: "Начнём со стойки. Лёгкие гантели стоят выше, а вес в ряду растёт слева направо. Попробуешь найти места для трёх пар?",
+    instruction: "Смотри, у каждой пары своё место. Лёгкие веса стоят выше, а на каждой полке вес растёт слева направо. Куда встанут три пары с пола?",
     lessonTitle: "Гантели на месте",
+    nextButton: "К штанге",
     takeaway: "Лёгкие пары ставь выше, тяжёлые ниже. На каждой полке вес растёт слева направо.",
   },
   BARBELL: {
     name: "Штанга",
     purpose: "Как распределить вес на грифе",
-    instruction: `Теперь к штанге. Для примера соберём ${barbell.targetKg} кг. Гриф весит ${barbell.shaftKg} кг, остальной вес поделим поровну.`,
+    instruction: `Теперь попробуем собрать штангу. Возьмём для примера ${barbell.targetKg} кг. Гриф уже весит ${barbell.shaftKg} кг, остальное поделим поровну.`,
     lessonTitle: "Штанга собрана",
+    nextButton: "К скамье",
     takeaway: "Набирай вес симметрично. Когда диски на месте, надень и защёлкни замки.",
   },
   BENCH: {
     name: "Скамья",
     purpose: "Как настроить наклон под упражнение",
     lessonTitle: "Скамья готова",
+    nextButton: "К инвентарю",
     takeaway: "Удерживай фиксатор, меняя наклон. В новом положении отпусти его и проверь фиксацию подушки.",
   },
   INVENTORY: {
     name: "Инвентарь",
     purpose: "Где взять коврик, резинку или роллер",
-    instruction: "И напоследок посмотрим, где хранится инвентарь. Разложим предметы по местам, чтобы на тренировке было проще найти нужное.",
+    instruction: "Осталось посмотреть, где лежит инвентарь. На табличках есть подсказки. Попробуй найти место для каждого предмета на полу.",
     lessonTitle: "Проход свободен",
+    nextButton: "Завершить игру",
     takeaway: "После подхода верни инвентарь в зоны хранения.",
   },
 } satisfies Record<StationId, {
@@ -108,6 +112,7 @@ export const stationDetails = {
   purpose: string;
   instruction?: string;
   lessonTitle: string;
+  nextButton: string;
   takeaway: string;
 }>;
 

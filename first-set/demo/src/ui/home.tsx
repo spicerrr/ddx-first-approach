@@ -55,9 +55,9 @@ function ApproachCard({ begin }: { begin: () => void }) {
       <img className="approach-photo" src={asset("coach-neutral")} alt="" fetchPriority="high" />
       <div className="approach-copy">
         <h2 id="approach-title">Впервые<br />в зале?</h2>
-        <p>Попробуй собрать штангу и настроить скамью перед тренировкой.</p>
+        <p>Попробуй оборудование перед первой тренировкой.</p>
         <SceneButton type="button" className="button primary" onActivate={begin}>
-          Попробовать в игре <Icon name="arrow" size={17} />
+          Открыть игру <Icon name="arrow" size={17} />
         </SceneButton>
       </div>
     </article>

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import type { Action, Progress, Result } from "../engine/game";
-import { benchGoals, benchNotches, benchParts, type BenchNotch, type BenchPart } from "../engine/scenario";
+import { benchGoals, benchNotches, benchParts, stationDetails, type BenchNotch, type BenchPart } from "../engine/scenario";
 import type { BenchPose } from "./bench-view";
 import { CheckBurst } from "./celebration";
 import { asset, Icon } from "./graphics";
@@ -16,7 +16,7 @@ const exercises = {
     switchTo: "К спинке",
     hold: "Потяни за жёлтый штифт и удерживай.",
     release: "Теперь можно отпустить штифт.",
-    instruction: "Теперь к скамье. Попробуем менять наклон под упражнение. Начнём со спинки.",
+    instruction: "Скамью можно подстроить под упражнение. Начнём со спинки. Когда отведёшь фиксатор, увидишь, куда её поднять.",
     demo: "Штифт остаётся выдвинутым, пока спинка движется.",
   },
   seat: {
@@ -24,7 +24,7 @@ const exercises = {
     switchTo: "К сиденью",
     hold: "Отведи П-образный рычаг и удерживай.",
     release: "Теперь можно отпустить рычаг.",
-    instruction: "Со спинкой получилось. У сиденья свой фиксатор, П-образный рычаг. Попробуем поднять сиденье.",
+    instruction: "Сиденье регулируется отдельно. Под ним П-образный рычаг. Попробуй отвести его и поднять сиденье до контура.",
     demo: "Рычаг остаётся отведённым, пока сиденье движется.",
   },
 };
@@ -72,8 +72,8 @@ export function BenchStation({ progress, submit }: { progress: Progress; submit:
   return (
     <section className="bench-station" data-bench-part={part} data-sandbox={complete || undefined}>
       <CoachFeedback message={complete
-        ? "Обе части настроены. Можешь попробовать другие положения или идти дальше."
-        : waitingForNext ? "Спинка зафиксирована. Дальше попробуем настроить сиденье." : exercise.instruction}
+        ? "Скамья готова. Если хочешь, попробуй другие положения."
+        : waitingForNext ? "Со спинкой получилось. Теперь попробуем сиденье." : exercise.instruction}
         hint={retry ? "Фиксатор встал на место. Попробуй ещё раз совместить подушку с бирюзовым контуром." : null} />
 
       <div className="bench-workshop">
@@ -138,7 +138,7 @@ export function BenchStation({ progress, submit }: { progress: Progress; submit:
               {exercises[otherPart].switchTo}
             </SceneButton>
             <SceneButton type="button" className="button primary" onActivate={() => submit({ kind: "finish-bench" })}>
-              Следующая станция <Icon name="arrow" size={17} />
+              {stationDetails.BENCH.nextButton} <Icon name="arrow" size={17} />
             </SceneButton>
           </>
         )}

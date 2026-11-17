@@ -22,9 +22,9 @@ export function IntroCover({ heading, begin, training }: { heading: Heading; beg
         <h1 ref={heading} tabIndex={-1}>Первый раз в зале</h1>
         <img src={asset("coach-greeting")} alt="" width={407} height={510} fetchPriority="high" />
       </div>
-      <p className="intro-cover-message">Привет! Давай попробуем то, что пригодится на первой тренировке. Я покажу, как подобрать вес и настроить оборудование.</p>
+      <p className="intro-cover-message">Привет! Собираешься на первую тренировку? Давай заранее разберёмся со снарядами. Покажу, где искать гантели и как выставить скамью.</p>
       <div className="intro-cover-actions">
-        <SceneButton type="button" className="button primary" onActivate={begin}>Начать подготовку <Icon name="arrow" /></SceneButton>
+        <SceneButton type="button" className="button primary" onActivate={begin}>Начать игру <Icon name="arrow" /></SceneButton>
         <SceneButton type="button" className="button ghost" onActivate={training}>Занятия с тренером <Icon name="arrow" size={17} /></SceneButton>
       </div>
     </section>
@@ -34,30 +34,29 @@ export function IntroCover({ heading, begin, training }: { heading: Heading; beg
 export function Route({ heading, progress, begin }: { heading: Heading; progress: Progress; begin: () => void }) {
   return (
     <section className="route">
-      <h1 ref={heading} tabIndex={-1}>Что пригодится в зале</h1>
-      <CoachMessage>{progress.phase === "ready"
-        ? "Представь, что ты уже в зале. Сначала найдём подходящий вес, потом подготовим оборудование к подходу."
-        : "Продолжим с того места, где остановились."}</CoachMessage>
-      <ol className="route-stations">
+      <h1 ref={heading} tabIndex={-1}>Маршрут по залу</h1>
+      {progress.phase === "ready" &&
+        <CoachMessage>Представь, что ты у стойки с гантелями. Начнём здесь, а после подхода заглянем к полкам с инвентарём.</CoachMessage>}
+      <ol className="route-stations" role="list" aria-label="Станции">
         {stations.map(({ stage }, index) => {
           const completed = index < progress.stageIndex;
           const current = index === progress.stageIndex;
           return <li key={stage} aria-current={current ? "step" : undefined}
             data-progress={completed ? "done" : current ? "current" : "locked"}>
-            <span className="route-number">{completed ? <Icon name="check" size={16} /> : index + 1}</span>
-            <div><strong>{stationDetails[stage].name}</strong>
+            <span className="route-number">{completed ? <><Icon name="check" size={16} /><span className="sr-only">Пройдено</span></> : index + 1}</span>
+            <div className="route-copy"><strong>{stationDetails[stage].name}</strong>
               <span>{stationDetails[stage].purpose}</span>
             </div>
             <div className="route-art">
               {stage === "BENCH" ? <Icon name="bench" size={35} /> :
-                <img className="equipment route-prop" src={asset(stationArt[stage])} alt="" />}
+                <img className="route-prop" src={asset(stationArt[stage])} alt="" />}
               {!completed && !current && <span className="route-lock" aria-label="Откроется после предыдущего задания"><Icon name="lock" size={14} /></span>}
             </div>
           </li>;
         })}
       </ol>
       <SceneButton type="button" className="button primary" onActivate={begin}>
-        {progress.phase === "ready" ? "К гантелям" : "Продолжить"} <Icon name="arrow" />
+        {progress.phase === "ready" ? "К гантелям" : "К станции"} <Icon name="arrow" />
       </SceneButton>
     </section>
   );
@@ -70,7 +69,7 @@ export function SceneResult({ heading, stage, next }: { heading: Heading; stage:
       <section className="scene-result-card">
         <CheckBurst />
         <h1 id="scene-result-title" className="sr-only" tabIndex={-1} ref={heading}>{detail.lessonTitle}</h1>
-        <SceneButton type="button" className="button primary" onActivate={next}>{stage === "INVENTORY" ? "К результату" : "Следующая станция"} <Icon name="arrow" /></SceneButton>
+        <SceneButton type="button" className="button primary" onActivate={next}>{detail.nextButton} <Icon name="arrow" /></SceneButton>
       </section>
     </div>
   );
@@ -87,7 +86,7 @@ export function Finish({ heading, training, home }: {
       <div>
         <FinishMedal />
         <h1 ref={heading} tabIndex={-1}>До встречи в зале</h1>
-        <p className="intro-text">Если хочется начать вместе с тренером, можно выбрать ознакомительную тренировку в своём клубе или короткое занятие в мини-группе.</p>
+        <p className="intro-text">Готово! Хочешь попробовать всё в зале вместе с тренером? Можно начать с ознакомительной тренировки в своём клубе.</p>
         <div className="finish-actions">
           <SceneButton type="button" className="button primary" onActivate={() => training("intro")}>Выбрать занятие с тренером <Icon name="arrow" /></SceneButton>
           <SceneButton type="button" className="button quiet" onActivate={home}>На главный экран</SceneButton>
