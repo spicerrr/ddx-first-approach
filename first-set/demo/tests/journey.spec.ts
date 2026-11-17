@@ -28,7 +28,17 @@ test("четыре станции, перетаскивание снарядов
 
   await page.goto("");
   await expect(button(page, "Начать знакомство")).toBeVisible();
+  const clubNavigation = page.getByRole("navigation", { name: "Разделы DDX Fitness" });
+  await expect(clubNavigation.getByRole("button", { name: "Главная" })).toHaveAttribute("aria-current", "page");
+  await expect(page.locator("#club-approach").getByRole("button", { name: "Начать знакомство" })).toHaveCSS("background-color", "rgb(255, 106, 77)");
   await capture(page, info, "01-home");
+  await press("Календарь");
+  await expect(page.getByRole("heading", { name: "Мой календарь", level: 1 })).toBeVisible();
+  await press("Action");
+  await press("Начать знакомство");
+  await press("Выйти");
+  await expect(page.getByRole("heading", { name: "Action", level: 1 })).toBeVisible();
+  await press("Главная");
   await press("Smart Start");
   await expect(page.getByRole("heading", { name: "Smart Start", exact: true })).toBeVisible();
   await press("Назад");
@@ -57,6 +67,8 @@ test("четыре станции, перетаскивание снарядов
   await capture(page, info, "04-station-result");
   await press("Следующая станция");
   await expect(weight(page)).toHaveText("60 кг");
+  await page.mouse.move(1, 1);
+  await expect(button(page, "Проверить")).toHaveCSS("background-color", "rgb(255, 106, 77)");
   await expect(page.getByRole("button", { name: /^Диск \d/ })).toHaveCount(0);
   await capture(page, info, "05-barbell");
   await move(["DISK_20_B", "FLOOR"]);
@@ -146,6 +158,7 @@ test("выход и перезагрузка открывают чистый м�
   await dragProp(page, placements.dumbbells[0], isMobile);
   await page.reload();
   await expect(button(page, "Продолжить")).toHaveCount(0);
+  await activate(page, "Начать знакомство", isMobile);
   await activate(page, "Пропустить", isMobile);
   await activate(page, "Узнать о Smart Start", isMobile);
   await expect(page.getByRole("link").first()).toHaveAttribute("href", "https://www.ddxfitness.ru/smart-start/");

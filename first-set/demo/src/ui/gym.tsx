@@ -20,6 +20,7 @@ type Prop = Point & {
   anchor?: readonly [number, number];
   layer?: number;
   pulse?: number | number[];
+  tone?: "coral" | "aqua";
 };
 type Target = Point & { id: string; label: string; width: number; height: number };
 type Held = {
@@ -148,7 +149,7 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
           onPointerCancel={(event) => pointerEnd(event, true)}
           onLostPointerCapture={(event) => pointerEnd(event, true)}
           onKeyDown={(event) => pickWithKeyboard(event, prop)}>
-          <img src={prop.src} alt="" draggable={false} />
+          <img src={prop.src} data-prop-tone={prop.tone} alt="" draggable={false} />
         </div>
       ))}
       {targets.map((target) => (
@@ -169,7 +170,7 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
           }} />
       ))}
       {drag && createPortal(
-        <img className="scene-carried" src={drag.prop.src} alt="" draggable={false}
+        <img className="scene-carried" src={drag.prop.src} data-prop-tone={drag.prop.tone} alt="" draggable={false}
           style={{ left: drag.x, top: drag.y, width: drag.width, rotate: (drag.prop.angle ?? 0) + "deg" }} />,
         document.body,
       )}
@@ -282,6 +283,7 @@ export function BarbellScene({ progress, submit }: Props) {
       size: disk ? (side ? mountedSize : stockSize)[disk.weightKg] : side ? 9.5 : 11.5,
       anchor: side ? (disk ? [68, 51.5] : [56, 61]) : undefined,
       pulse: disk ? weightPulse[disk.weightKg] : [10, 26, 9],
+      tone: disk ? disk.weightKg === 5 ? "aqua" : undefined : "coral",
     };
   });
 
@@ -310,10 +312,10 @@ export function BarbellScene({ progress, submit }: Props) {
 }
 
 const storage = [
-  { x: 21, y: 14.8, width: 35, height: 23.5, shade: "blue" },
-  { x: 79, y: 14.8, width: 35, height: 23.5, shade: "mint" },
-  { x: 21, y: 85.5, width: 35, height: 22.0, shade: "lavender" },
-  { x: 79, y: 85.5, width: 35, height: 22.0, shade: "peach" },
+  { x: 21, y: 14.8, width: 35, height: 23.5, shade: "aqua" },
+  { x: 79, y: 14.8, width: 35, height: 23.5, shade: "surface" },
+  { x: 21, y: 85.5, width: 35, height: 22.0, shade: "light" },
+  { x: 79, y: 85.5, width: 35, height: 22.0, shade: "coral" },
 ];
 const looseInventory = [
   { x: 21, y: 39, angle: -13, size: 20 },

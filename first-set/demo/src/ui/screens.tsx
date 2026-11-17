@@ -21,27 +21,7 @@ const stationArt: Record<StationId, ArtName> = {
   INVENTORY: "mat",
 };
 
-export function Home({ heading, begin, skip }: { heading: Heading; begin: () => void; skip: () => void }) {
-  return (
-    <section className="welcome">
-      <article className="onboarding-card">
-        <figure className="welcome-image">
-          <img src={sceneAsset("coach")} width={540} height={810} alt="" fetchPriority="high" />
-        </figure>
-        <div className="welcome-copy">
-          <h1 ref={heading} tabIndex={-1}>Первый подход</h1>
-          <p className="intro-text">Знакомство с залом перед первой тренировкой.</p>
-          <SceneButton type="button" className="button primary" onActivate={begin}>Начать знакомство <Icon name="arrow" /></SceneButton>
-        </div>
-      </article>
-      <div className="welcome-actions">
-        <SceneButton type="button" className="button quiet" onActivate={skip}>Пропустить</SceneButton>
-      </div>
-    </section>
-  );
-}
-
-export function Briefing({ heading, next }: { heading: Heading; next: () => void }) {
+export function Briefing({ heading, next, skip }: { heading: Heading; next: () => void; skip: () => void }) {
   return (
     <section className="coach-brief">
       <img className="coach-photo" src={sceneAsset("coach")} alt="" width={540} height={810} />
@@ -50,6 +30,7 @@ export function Briefing({ heading, next }: { heading: Heading; next: () => void
         <h1 ref={heading} tabIndex={-1}>Привет!</h1>
         <p>Давай пройдёмся по залу. Я покажу, где оставить инвентарь и как разобраться со скамьёй перед подходом.</p>
         <SceneButton type="button" className="button primary" onActivate={next}>К маршруту <Icon name="arrow" /></SceneButton>
+        <SceneButton type="button" className="button quiet" onActivate={skip}>Пропустить</SceneButton>
       </div>
     </section>
   );

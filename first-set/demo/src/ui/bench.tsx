@@ -203,14 +203,14 @@ export function BenchChecks({ station, progress, submit }: {
         {check && (
           <div className="bench-options">
             {check.options.map(({ id, label }) => (
-              <SceneButton key={id} className="button secondary" type="button" onActivate={(keyboard) => checkStep(id, keyboard)}>{label}</SceneButton>
+              <SceneButton key={id} className="button ghost" type="button" onActivate={(keyboard) => checkStep(id, keyboard)}>{label}</SceneButton>
             ))}
           </div>
         )}
         {findLatch && (
           <div className="bench-options">
             {mechanisms.map((choice) => (
-              <SceneButton key={choice.id} className={`button ${hint && part === choice.id ? "primary" : "secondary"}`} type="button"
+              <SceneButton key={choice.id} className={`button ${hint && part === choice.id ? "primary" : "ghost"}`} type="button"
                 onActivate={(keyboard) => chooseMechanism(choice, keyboard)}>{choice.label}</SceneButton>
             ))}
             <SceneButton className="button quiet" type="button" onActivate={() => {
