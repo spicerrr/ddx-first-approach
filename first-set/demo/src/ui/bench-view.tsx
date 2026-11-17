@@ -15,6 +15,7 @@ type Props = {
   notch: BenchNotch;
   target?: BenchNotch;
   paused: boolean;
+  keyboardControls: boolean;
   onPreview: (notch?: BenchNotch) => void;
   onAdjust: (notch: BenchNotch) => void;
 };
@@ -348,6 +349,7 @@ function idle(): Manipulation {
 const lastNotch = benchNotches.length - 1;
 
 export default function BenchView(props: Props) {
+  const modelRoot = useRef<HTMLDivElement>(null);
   const surface = useRef<HTMLDivElement>(null);
   const latch = useRef<HTMLButtonElement>(null);
   const cushion = useRef<HTMLButtonElement>(null);
@@ -395,6 +397,12 @@ export default function BenchView(props: Props) {
     window.addEventListener("blur", cancel);
     return () => window.removeEventListener("blur", cancel);
   }, [props.part, props.paused]);
+
+  useEffect(() => {
+    if (props.keyboardControls && !props.paused && status !== "loading") {
+      modelRoot.current?.focus({ preventScroll: true });
+    }
+  }, [props.part, props.keyboardControls, props.paused, status]);
 
   function updatePreview() {
     const active = manipulation.current;
@@ -465,7 +473,8 @@ export default function BenchView(props: Props) {
   }
 
   function keyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (props.paused || status === "loading" || event.target !== event.currentTarget) return;
+    if (props.paused || status === "loading") return;
+    if (event.target instanceof HTMLButtonElement && !event.target.hasAttribute("data-bench-control")) return;
     const active = manipulation.current;
     if (event.code === "Space") {
       event.preventDefault();
@@ -488,7 +497,7 @@ export default function BenchView(props: Props) {
   }
 
   return (
-    <div className="bench-view" data-model={status} data-unlocked={unlocked || undefined} data-aligned={aligned || undefined}
+    <div ref={modelRoot} className="bench-view" data-model={status} data-unlocked={unlocked || undefined} data-aligned={aligned || undefined}
       tabIndex={0} aria-label="Трёхмерная скамья" aria-describedby={props.paused ? undefined : "bench-operation"}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) startDrag(event, "cushion");

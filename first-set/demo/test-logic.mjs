@@ -31,6 +31,9 @@ const actions = [
     place("INVENTORY", "BAND_1", "BANDS"), place("INVENTORY", "BAND_2", "BANDS"),
     place("INVENTORY", "BLOCK_1", "BLOCKS"), place("INVENTORY", "BLOCK_2", "BLOCKS"),
     place("INVENTORY", "ROLLER_1", "ROLLERS"), place("INVENTORY", "ROLLER_2", "ROLLERS"),
+    place("INVENTORY", "PLATE_5", "PLATES_5"), place("INVENTORY", "PLATE_10", "PLATES_10"),
+    place("INVENTORY", "PLATE_15", "PLATES_15"), place("INVENTORY", "PLATE_20", "PLATES_20"),
+    place("INVENTORY", "PLATE_25", "PLATES_25"),
   ],
 ];
 
@@ -206,6 +209,8 @@ describe("Один игровой маршрут", () => {
   it("отклоняет чужую зону, неизвестный предмет и действие другой станции", () => {
     const state = accept(atStation(3), actions[3][0]);
     reject(state, place("INVENTORY", "MAT_2", "BANDS"));
+    reject(state, place("INVENTORY", "PLATE_5", "PLATES_10"), "5 кг");
+    reject(state, place("INVENTORY", "BAND_1", "ROLLERS"), "крючки");
     reject(state, place("INVENTORY", "UNKNOWN", "MATS"));
     reject(state, actions[0][0]);
     expect(state.placements.INVENTORY).toEqual({ MAT_1: "MATS" });

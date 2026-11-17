@@ -26,6 +26,9 @@ export const benchNotches = [0, 1, 2, 3] as const;
 export type BenchNotch = typeof benchNotches[number];
 export const benchGoals = { backrest: 2, seat: 1 } as const satisfies Record<BenchPart, BenchNotch>;
 
+export const inventoryPlateWeights = [5, 10, 15, 20, 25] as const;
+export const plateRackSlot = (weightKg: number) => `PLATES_${weightKg}`;
+
 const dumbbells = rackWeights.flatMap((weightKg) =>
   ["A", "B"].map((copy) => ({
     id: `DB_${weightKg}_${copy}`,
@@ -65,7 +68,17 @@ export const stations: readonly Station[] = contractStations.map((station) => {
       ...station, title: "Скамья",
       items: [],
     };
-    case "INVENTORY": return { ...station, title: "Инвентарь" };
+    case "INVENTORY": return {
+      ...station,
+      title: "Инвентарь",
+      items: [...station.items, ...inventoryPlateWeights.map((weightKg) => ({
+        id: `PLATE_${weightKg}`, label: `Бамперный диск ${weightKg} кг`, weightKg,
+      }))],
+      targets: [
+        ...station.targets.map((target) => target.id === "BANDS" ? { ...target, label: "Крючки для резинок" } : target),
+        ...inventoryPlateWeights.map((weightKg) => ({ id: plateRackSlot(weightKg), label: `Место для диска ${weightKg} кг` })),
+      ],
+    };
   }
 });
 export const lastStation = stations.length - 1;
@@ -101,8 +114,8 @@ export const stationDetails = {
   },
   INVENTORY: {
     name: "Инвентарь",
-    purpose: "Где взять коврик, резинку или роллер",
-    instruction: "Осталось посмотреть, где лежит инвентарь. На табличках есть подсказки. Попробуй найти место для каждого предмета на полу.",
+    purpose: "Куда вернуть инвентарь после подхода",
+    instruction: "После подхода убираем инвентарь. На стойке диски идут по весу, а резинки можно повесить на крючки.",
     lessonTitle: "Проход свободен",
     nextButton: "Завершить игру",
     takeaway: "После подхода верни инвентарь в зоны хранения.",
@@ -124,5 +137,7 @@ const inventoryZones: Readonly<Partial<Record<string, string>>> = {
 };
 
 export function inventoryDestination(item: Item) {
-  return inventoryZones[item.id.split("_")[0]];
+  const kind = item.id.split("_")[0];
+  if (kind === "PLATE" && item.weightKg !== undefined) return plateRackSlot(item.weightKg);
+  return inventoryZones[kind];
 }

@@ -18,6 +18,8 @@ export const placements = {
   inventory: [
     ["MAT_1", "MATS"], ["BAND_1", "BANDS"], ["BLOCK_1", "BLOCKS"], ["ROLLER_1", "ROLLERS"],
     ["MAT_2", "MATS"], ["BAND_2", "BANDS"], ["BLOCK_2", "BLOCKS"], ["ROLLER_2", "ROLLERS"],
+    ["PLATE_5", "PLATES_5"], ["PLATE_10", "PLATES_10"], ["PLATE_15", "PLATES_15"],
+    ["PLATE_20", "PLATES_20"], ["PLATE_25", "PLATES_25"],
   ],
 } as const;
 
@@ -81,10 +83,13 @@ export async function openBench(page: Page) {
 }
 
 export async function keyboardBench(page: Page, notches = 1) {
-  await page.locator(".bench-view").focus();
+  const view = page.locator(".bench-view");
+  await expect(view).toBeFocused();
   await page.keyboard.down("Space");
+  await expect(view).toHaveAttribute("data-unlocked", "true");
   for (let index = 0; index < notches; index++) await page.keyboard.press("ArrowUp");
   await page.keyboard.up("Space");
+  await expect(view).not.toHaveAttribute("data-unlocked", "true");
 }
 
 type Finger = { x: number; y: number; id: number };

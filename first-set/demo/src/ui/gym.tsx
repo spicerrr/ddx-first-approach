@@ -2,10 +2,10 @@ import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerE
 import { createPortal } from "react-dom";
 import { barbellLayout, diskHint, type BarbellDestination } from "../engine/barbell";
 import type { Action, Progress, Result } from "../engine/game";
-import { barbell, barbellSides, floorId, rackRows, rackTargets, stationDetails, type BarbellSide, type Station } from "../engine/scenario";
+import { barbell, barbellSides, floorId, inventoryPlateWeights, plateRackSlot, rackRows, rackTargets, stationDetails, type BarbellSide, type Station } from "../engine/scenario";
 import { asset, Icon, inventoryAsset } from "./graphics";
 import { SceneButton } from "./scene-button";
-import { CoachFeedback, CoachHint } from "./coach-message";
+import { CoachFeedback } from "./coach-message";
 import barbellArt from "./barbell-art.json";
 import rackArt from "./rack-art.json";
 
@@ -38,7 +38,7 @@ type Held = {
   moved: boolean;
 };
 type Drag = Point & { prop: Prop; width: number; over?: string };
-type Feedback = { message: string; returned?: string };
+type Feedback = { message: string; kind: "warning" | "guide"; returned?: string };
 
 function InteractionField({ name, props, targets, feedback, setFeedback, onDrop, children }: {
   name: string;
@@ -66,12 +66,14 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
 
   function commit(prop: Prop, target: string) {
     const result = onDrop(prop, target);
-    setFeedback(result.message ? { message: result.message, returned: !result.accepted ? prop.id : undefined } : null);
     if (result.accepted) {
+      setFeedback(result.message ? { kind: "guide", message: result.message } : null);
       setLanded((ids) => ids.includes(prop.id) ? ids : [...ids, prop.id]);
       if (prop.pulse && target !== floorId && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         navigator.vibrate?.(prop.pulse);
       }
+    } else if (result.message) {
+      setFeedback({ kind: "warning", message: result.message, returned: prop.id });
     }
     return result;
   }
@@ -123,7 +125,9 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
     if (event.key !== " " && event.key !== "Enter") return;
     event.preventDefault();
     setKeyboard(prop);
-    setFeedback({ message: "Выбери место клавишей Tab и нажми пробел." });
+    if (feedback?.kind !== "warning") {
+      setFeedback({ kind: "guide", message: "Выбери место клавишей Tab и нажми пробел." });
+    }
     field.current?.querySelector<HTMLElement>("[data-scene-target]")?.focus({ preventScroll: true });
   }
 
@@ -133,7 +137,7 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
         if (event.key === "Escape" && keyboard) {
           focusProp(keyboard);
           setKeyboard(null);
-          setFeedback(null);
+          if (feedback?.kind === "guide") setFeedback(null);
         }
       }}>
       {children}
@@ -230,6 +234,12 @@ const rackDropTargets = [
 export function DumbbellScene({ station, progress, submit }: Props & { station: Station }) {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const assigned = progress.placements.DUMBBELLS;
+  const placements = Object.values(assigned);
+  const lastPair = rackTargets.find(({ id }) => id === placements.at(-1));
+  const message = !lastPair ? stationDetails.DUMBBELLS.instruction
+    : placements.filter((id) => id === lastPair.id).length === 2
+      ? `Пара ${lastPair.weightKg} кг на месте. Посмотри, какие гантели ещё остались на полу.`
+      : `Гантель ${lastPair.weightKg} кг на месте. Найди вторую с таким же весом.`;
   const props = station.items.map<Prop>((item, index) => {
     const spot = rackPockets.find((pocket) => pocket.target && pocket.target.id === assigned[item.id]);
     const pair = spot ? Object.keys(assigned).filter((id) => assigned[id] === spot.target?.id) : [];
@@ -248,9 +258,15 @@ export function DumbbellScene({ station, progress, submit }: Props & { station: 
 
   return (
     <div className="dumbbell-board">
-      <CoachFeedback hint={feedback?.message} message={stationDetails.DUMBBELLS.instruction} />
+      <CoachFeedback hint={feedback?.kind === "warning" ? feedback.message : null}
+        message={feedback?.kind === "guide" ? feedback.message : message} />
       <InteractionField name="gym-floor" props={props} targets={rackDropTargets} feedback={feedback} setFeedback={setFeedback}
-        onDrop={(prop, destination) => submit({ kind: "place", stage: "DUMBBELLS", item: prop.id, destination })}>
+        onDrop={(prop, destination) => {
+          const result = submit({ kind: "place", stage: "DUMBBELLS", item: prop.id, destination });
+          return result.accepted && destination === floorId
+            ? { ...result, message: "Гантель снова на полу. Можно поставить её в пару." }
+            : result;
+        }}>
         <img className="scene-backdrop" src={asset("rack-studio")} draggable={false}
           alt="На верхней полке стоят пары 2, 4 и 6 кг. На нижней стоят пары 10 и 14 кг." />
         {rackPockets.map((pocket) => {
@@ -297,6 +313,13 @@ export function BarbellScene({ progress, submit }: Props) {
   const assembly = progress.barbell;
   const layout = barbellLayout(assembly);
   const { totalKg, collarCount, disksReady } = layout;
+  const mountedCollars = Object.keys(assembly.collars).length;
+  const message = collarCount === 2 ? "Оба замка защёлкнуты. Можно проверить сборку."
+    : mountedCollars === 2 ? "Замки на месте. Осталось закрыть рычажки."
+      : disksReady ? mountedCollars === 1 ? "Один замок на месте. Проверь вторую сторону."
+        : "Вес совпал. Теперь можно надеть замки и закрыть рычажки."
+        : totalKg > barbell.shaftKg ? `Слева ${layout.leftKg} кг, справа ${layout.rightKg} кг. Цель — по ${(barbell.targetKg - barbell.shaftKg) / 2} кг дисков на сторону.`
+          : stationDetails.BARBELL.instruction;
   const mounts = new Map<string, { side: BarbellSide; axial: number; thickness: number }>();
   for (const side of barbellSides) {
     const sign = side === "LEFT" ? -1 : 1;
@@ -340,22 +363,25 @@ export function BarbellScene({ progress, submit }: Props) {
 
   function verify() {
     const result = submit({ kind: "check-barbell" });
-    setFeedback(result.accepted ? null : { message: result.message });
+    setFeedback(result.accepted ? null : { kind: "warning", message: result.message });
   }
 
   const shaft = barbellArt.parts["bar-shaft"];
   return (
     <div className="barbell-board">
-      <CoachFeedback message={collarCount === 2
-        ? "Оба замка на месте. Можно проверить сборку."
-        : disksReady ? "Вес совпал. Теперь можно надеть замки и закрыть рычажки." : stationDetails.BARBELL.instruction}
-        hint={feedback?.message ?? (totalKg === barbell.targetKg ? diskHint(layout) : null)} />
+      <CoachFeedback message={feedback?.kind === "guide" ? feedback.message : message}
+        hint={feedback?.kind === "warning" ? feedback.message : totalKg === barbell.targetKg ? diskHint(layout) : null} />
       <div className="barbell-mass">
         <div><span>Текущий вес</span><strong key={totalKg} data-current-weight={totalKg} aria-live="polite">{totalKg} кг</strong></div>
         <p>Цель <strong>{barbell.targetKg} кг</strong></p>
       </div>
       <InteractionField key={resetCount} name="barbell-table" props={props} targets={barbellTargets} feedback={feedback} setFeedback={setFeedback}
-        onDrop={(prop, destination) => submit({ kind: "move-barbell", item: prop.id, destination: destination as BarbellDestination })}>
+        onDrop={(prop, destination) => {
+          const result = submit({ kind: "move-barbell", item: prop.id, destination: destination as BarbellDestination });
+          return result.accepted && barbellLayout(result.progress.barbell).totalKg === barbell.shaftKg
+            ? { ...result, message: "Гриф снова пустой. Теперь можно собрать вес заново." }
+            : result;
+        }}>
         <span className="barbell-shadow" aria-hidden="true" />
         <img className="shaft-art" src={asset("bar-shaft")} alt="" draggable={false}
           style={{ left: onShaft(0).x + "%", top: onShaft(0).y + "%", width: shaft.width + "%",
@@ -382,10 +408,6 @@ export function BarbellScene({ progress, submit }: Props) {
           );
         })}
       </InteractionField>
-      <div className="barbell-tip" aria-live="polite">
-        {disksReady && !feedback && !Object.keys(assembly.collars).length &&
-          <CoachHint>С одинаковыми дисками проще набирать вес поровну. Можно начать с тяжёлых и добавлять их парами.</CoachHint>}
-      </div>
       <div className="assembly-note">
         <span>Гриф весит {barbell.shaftKg} кг</span>
         <span><Icon name="lock" size={14} /> Замки {collarCount}/2</span>
@@ -393,7 +415,7 @@ export function BarbellScene({ progress, submit }: Props) {
       <SceneButton type="button" className="button primary assembly-check" onActivate={verify}>Проверить <Icon name="check" size={18} /></SceneButton>
       <SceneButton type="button" className="button quiet assembly-reset" onActivate={() => {
         if (submit({ kind: "reset-barbell" }).accepted) {
-          setFeedback({ message: "Диски снова в лотке. Можно попробовать другую сборку." });
+          setFeedback({ kind: "guide", message: "Диски снова в лотке. Можно попробовать другую сборку." });
           setResetCount((count) => count + 1);
         }
       }}><Icon name="rotate" size={17} /> Сбросить штангу</SceneButton>
@@ -401,50 +423,100 @@ export function BarbellScene({ progress, submit }: Props) {
   );
 }
 
-const storage = [
-  { x: 21, y: 14.8, width: 35, height: 23.5, shade: "aqua" },
-  { x: 79, y: 14.8, width: 35, height: 23.5, shade: "surface" },
-  { x: 21, y: 85.5, width: 35, height: 22.0, shade: "light" },
-  { x: 79, y: 85.5, width: 35, height: 22.0, shade: "coral" },
+type StorageSpot = Point & { size: number; anchor?: readonly [number, number] };
+type StorageZone = Omit<Target, "id" | "label"> & {
+  kind: "bin" | "hook" | "peg";
+  spots: readonly StorageSpot[];
+  tag?: Point;
+  shade?: string;
+};
+
+function storageBin(x: number, shade: string): StorageZone {
+  return {
+    kind: "bin", x, y: 90, width: 30, height: 16, shade,
+    spots: [{ x: x - 6.5, y: 92, size: 12.4 }, { x: x + 6.5, y: 92, size: 12.4 }],
+  };
+}
+
+const platePegs = [
+  { x: 19, y: 14.6, tag: { x: 10.3, y: 16.4 }, size: 9.6 },
+  { x: 32, y: 11.8, tag: { x: 40.8, y: 13.4 }, size: 10.4 },
+  { x: 19, y: 26.4, tag: { x: 10.3, y: 28.1 }, size: 11 },
+  { x: 32, y: 23, tag: { x: 40.8, y: 24.8 }, size: 11.6 },
+  { x: 19, y: 36.9, tag: { x: 10.3, y: 38.7 }, size: 12.4 },
 ];
+
+const storage: Record<string, StorageZone> = {
+  MATS: storageBin(17.5, "coral"),
+  BLOCKS: storageBin(50, "surface"),
+  ROLLERS: storageBin(82.5, "light"),
+  BANDS: {
+    kind: "hook", x: 75, y: 20, width: 36, height: 24,
+    spots: [
+      { x: 73.2, y: 15.4, size: 4.6, anchor: [50, 5] },
+      { x: 79.2, y: 14.9, size: 4.6, anchor: [50, 5] },
+    ],
+  },
+  ...Object.fromEntries(inventoryPlateWeights.map((weight, index) => {
+    const peg = platePegs[index];
+    return [plateRackSlot(weight), {
+      kind: "peg", x: (peg.x + peg.tag.x) / 2, y: peg.y, width: 20.7, height: 10.4,
+      tag: peg.tag, spots: [{ x: peg.x, y: peg.y, size: peg.size }],
+    } satisfies StorageZone];
+  })),
+};
+
 const looseInventory = [
-  { x: 21, y: 39, angle: -13, size: 20 },
-  { x: 48, y: 32, angle: 18, size: 15 },
-  { x: 74, y: 39, angle: -20, size: 16 },
-  { x: 89, y: 55, angle: 16, size: 17 },
-  { x: 12, y: 61, angle: 16, size: 20 },
-  { x: 38, y: 65, angle: -17, size: 15 },
-  { x: 56, y: 47, angle: 10, size: 16 },
-  { x: 65, y: 66, angle: -18, size: 17 },
+  { x: 13, y: 64, angle: -10, size: 17 },
+  { x: 38, y: 75, angle: 12, size: 15.5 },
+  { x: 63, y: 64, angle: -14, size: 16 },
+  { x: 88, y: 75, angle: 10, size: 16 },
+  { x: 13, y: 75, angle: 10, size: 17 },
+  { x: 38, y: 64, angle: -11, size: 15.5 },
+  { x: 63, y: 75, angle: 11, size: 16 },
+  { x: 88, y: 64, angle: -9, size: 16 },
+  ...[12, 31, 50, 69, 88].map((x) => ({ x, y: 52, size: 12.3 })),
 ];
 
 export function InventoryScene({ station, progress, submit }: Props & { station: Station }) {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const assigned = progress.placements.INVENTORY;
-  const zones = station.targets.map((target, index) => ({
-    ...target, ...storage[index],
+  const zones = station.targets.map((target) => ({
+    ...target, ...storage[target.id],
     items: Object.keys(assigned).filter((id) => assigned[id] === target.id),
   }));
+  const lastZone = Object.values(assigned).at(-1);
+  const message = !lastZone ? stationDetails.INVENTORY.instruction
+    : lastZone === "BANDS" ? "Резинка на крючке. Посмотри, что ещё осталось на полу."
+      : lastZone.startsWith("PLATES_") ? "Диск на своём штыре. Остальные места тоже подписаны по весу."
+        : "Предмет на месте. Что ещё осталось убрать?";
   const props = station.items.map<Prop>((item, index) => {
-    const bin = zones.find((zone) => zone.id === assigned[item.id]);
-    const position = bin ? {
-      x: bin.x + (bin.items[0] === item.id ? -8 : 8), y: bin.y + 3, size: 16.5,
-    } : looseInventory[index];
+    const zone = zones.find((zone) => zone.id === assigned[item.id]);
+    const position = zone ? zone.spots[zone.items.indexOf(item.id)] : looseInventory[index];
     return {
-      ...position, id: item.id, label: item.label, location: bin?.id ?? floorId,
-      src: inventoryAsset(item), stationary: Boolean(bin),
+      ...position, id: item.id, label: item.label, location: zone?.id ?? floorId,
+      src: zone?.kind === "hook" ? asset("inventory-band-hanging") : inventoryAsset(item),
+      fitted: Boolean(zone), stationary: Boolean(zone),
     };
   });
   return (
     <div className="inventory-board">
-      <CoachFeedback hint={feedback?.message} message={stationDetails.INVENTORY.instruction} />
+      <CoachFeedback hint={feedback?.kind === "warning" ? feedback.message : null}
+        message={feedback?.kind === "guide" ? feedback.message : message} />
       <InteractionField name="storage-floor" props={props} targets={zones} feedback={feedback} setFeedback={setFeedback}
         onDrop={(prop, destination) => submit({ kind: "place", stage: "INVENTORY", item: prop.id, destination })}>
-        {zones.map((zone) => (
-          <div className="storage-area" data-shade={zone.shade} data-full={zone.items.length === 2 || undefined} key={zone.id}
+        <img className="storage-rack plate-rack" src={asset("inventory-plate-rack")} draggable={false} alt="" />
+        <img className="storage-rack band-rack" src={asset("inventory-band-rack")} draggable={false} alt="" />
+        <span className="storage-rack-label" data-rack="plates">Диски</span>
+        <span className="storage-rack-label" data-rack="bands">Резинки</span>
+        {zones.map((zone) => zone.kind === "bin" ? (
+          <div className="storage-area" data-shade={zone.shade} data-full={zone.items.length === zone.spots.length || undefined} key={zone.id}
             style={{ left: zone.x + "%", top: zone.y + "%", width: zone.width + "%", height: zone.height + "%" }}>
             <span>{zone.label}</span>
           </div>
+        ) : zone.tag && (
+          <span className="storage-peg-tag" key={zone.id} data-full={zone.items.length > 0 || undefined}
+            style={{ left: zone.tag.x + "%", top: zone.tag.y + "%" }}>{zone.id.split("_")[1]} кг</span>
         ))}
       </InteractionField>
     </div>

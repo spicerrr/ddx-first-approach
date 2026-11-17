@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import type { Action, Progress, Result } from "../engine/game";
 import { benchGoals, benchNotches, benchParts, stationDetails, type BenchNotch, type BenchPart } from "../engine/scenario";
 import type { BenchPose } from "./bench-view";
@@ -9,6 +9,12 @@ import { CoachFeedback } from "./coach-message";
 
 const BenchView = lazy(() => import("./bench-view"));
 const lastNotch = benchNotches.length - 1;
+const finePointer = "(pointer: fine) and (hover: hover)";
+
+function startsWithTouch() {
+  return window.matchMedia("(pointer: coarse)").matches
+    || (navigator.maxTouchPoints > 0 && !window.matchMedia(finePointer).matches);
+}
 
 const exercises = {
   backrest: {
@@ -34,6 +40,7 @@ export function BenchStation({ progress, submit }: { progress: Progress; submit:
   const complete = pending === undefined;
   const [part, setPart] = useState<BenchPart>(pending ?? "seat");
   const [showDemo, setShowDemo] = useState(false);
+  const [touchControls, setTouchControls] = useState(startsWithTouch);
   const [preview, setPreview] = useState<BenchNotch>();
   const [retry, setRetry] = useState(false);
   const [celebrated, setCelebrated] = useState<BenchPart>();
@@ -53,6 +60,15 @@ export function BenchStation({ progress, submit }: { progress: Progress; submit:
     ReleaseSeatLatch: 0,
   };
 
+  useEffect(() => {
+    const pointer = window.matchMedia(finePointer);
+    function update() {
+      setTouchControls(startsWithTouch());
+    }
+    pointer.addEventListener("change", update);
+    return () => pointer.removeEventListener("change", update);
+  }, []);
+
   function choose(nextPart: BenchPart) {
     setPart(nextPart);
     setPreview(undefined);
@@ -65,12 +81,15 @@ export function BenchStation({ progress, submit }: { progress: Progress; submit:
     const result = submit({ kind: "bench-adjustment", part, notch: next });
     if (target === undefined) return;
     const matched = result.progress.benchAdjustments.includes(part);
-    setRetry(!matched && next !== notch);
+    setRetry(!matched);
     if (matched) setCelebrated(part);
   }
 
   return (
-    <section className="bench-station" data-bench-part={part} data-sandbox={complete || undefined}>
+    <section className="bench-station" data-bench-part={part} data-sandbox={complete || undefined}
+      onPointerDownCapture={(event) => {
+        if (event.pointerType) setTouchControls(event.pointerType !== "mouse");
+      }}>
       <CoachFeedback message={complete
         ? "Скамья готова. Если хочешь, попробуй другие положения."
         : waitingForNext ? "Со спинкой получилось. Теперь попробуем сиденье." : exercise.instruction}
@@ -85,7 +104,7 @@ export function BenchStation({ progress, submit }: { progress: Progress; submit:
           </div>
           <div inert={showDemo}>
             <Suspense fallback={<div className="bench-view"><p className="bench-status" role="status">Загружается 3D-модель…</p></div>}>
-              <BenchView part={part} pose={pose} notch={notch}
+              <BenchView part={part} pose={pose} notch={notch} keyboardControls={!touchControls}
                 target={target} paused={waitingForNext || showDemo} onPreview={setPreview} onAdjust={adjust} />
             </Suspense>
           </div>
@@ -103,18 +122,15 @@ export function BenchStation({ progress, submit }: { progress: Progress; submit:
         {!waitingForNext && (
           <p className="bench-cue" id="bench-operation" aria-live="polite">
             <span className="bench-cue-rest">
-              <span className="bench-touch-help">{exercise.hold}</span>
-              <span className="bench-key-help">Удерживай пробел, чтобы отвести фиксатор.</span>
+              {touchControls ? exercise.hold : "Удерживай пробел, чтобы отвести фиксатор."}
             </span>
             <span className="bench-cue-move">
-              {(preview === undefined || target === undefined) ? <>
-                <span className="bench-touch-help">{target === undefined ? "Вторым пальцем меняй наклон." : "Вторым пальцем совмести подушку с контуром."}</span>
-                <span className="bench-key-help">Меняй наклон мышью или стрелками.</span>
-              </> : direction}
+              {preview !== undefined && target !== undefined ? direction
+                : !touchControls ? "Меняй наклон мышью или стрелками."
+                  : target === undefined ? "Вторым пальцем меняй наклон." : "Вторым пальцем совмести подушку с контуром."}
             </span>
             <span className="bench-cue-snap">
-              <span className="bench-touch-help">{exercise.release}</span>
-              <span className="bench-key-help">Теперь можно отпустить пробел.</span>
+              {touchControls ? exercise.release : "Теперь можно отпустить пробел."}
             </span>
           </p>
         )}

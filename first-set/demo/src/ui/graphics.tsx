@@ -46,5 +46,6 @@ export function Equipment({ name, className = "", alt = "" }: { name: ArtName; c
 }
 
 export function inventoryAsset(item: Item) {
+  if (item.id.startsWith("PLATE_")) return asset("inventory-plate-" + item.weightKg);
   return asset(inventoryArt[item.id.split("_")[0]]);
 }

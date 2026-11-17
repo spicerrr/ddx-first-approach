@@ -69,6 +69,7 @@ export function SceneResult({ heading, stage, next }: { heading: Heading; stage:
       <section className="scene-result-card">
         <CheckBurst />
         <h1 id="scene-result-title" className="sr-only" tabIndex={-1} ref={heading}>{detail.lessonTitle}</h1>
+        {stage === "BARBELL" && <p className="scene-result-tip">С одинаковыми дисками проще набирать вес поровну. Можно начать с тяжёлых и добавлять их парами.</p>}
         <SceneButton type="button" className="button primary" onActivate={next}>{detail.nextButton} <Icon name="arrow" /></SceneButton>
       </section>
     </div>

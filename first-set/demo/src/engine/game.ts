@@ -152,6 +152,8 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
     if (Object.hasOwn(placements, item.id)) return reject("Этот предмет уже на месте.");
     const expected = inventoryDestination(item);
     if (target?.id !== expected) {
+      if (item.id.startsWith("PLATE_")) return reject(`На стойке у каждого веса своё место. Для этого диска подойдёт штырь с отметкой ${item.weightKg} кг.`);
+      if (expected === "BANDS") return reject("Резинки вешаем на крючки правой стойки.");
       const label = station.targets.find(({ id }) => id === expected)?.label;
       return reject(label ? `Для этого предмета подходит зона «${label}». Попробуй её.` : "Давай найдём подходящую зону хранения.");
     }
