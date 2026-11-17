@@ -2,9 +2,10 @@ import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerE
 import { createPortal } from "react-dom";
 import { barbellLayout, type BarbellDestination } from "../engine/barbell";
 import type { Action, Progress, Result } from "../engine/game";
-import { barbell, barbellSides, floorId, rackRows, rackTargets, type BarbellSide, type Station } from "../engine/scenario";
-import { asset, Icon, inventoryAsset, sceneAsset } from "./graphics";
+import { barbell, barbellSides, floorId, rackRows, rackTargets, stationDetails, type BarbellSide, type Station } from "../engine/scenario";
+import { asset, Icon, inventoryAsset } from "./graphics";
 import { SceneButton } from "./scene-button";
+import { CoachMessage } from "./coach-message";
 import barbellArt from "./barbell-art.json";
 import rackArt from "./rack-art.json";
 
@@ -36,7 +37,7 @@ type Held = {
   moved: boolean;
 };
 type Drag = Point & { prop: Prop; width: number; over?: string };
-type Feedback = { message: string; error?: boolean; target?: string; item?: string };
+type Feedback = { message: string; returned?: string };
 
 function InteractionField({ name, props, targets, feedback, setFeedback, onDrop, children }: {
   name: string;
@@ -64,7 +65,7 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
 
   function commit(prop: Prop, target: string) {
     const result = onDrop(prop, target);
-    setFeedback(result.message ? { message: result.message, error: !result.accepted, target, item: prop.id } : null);
+    setFeedback(result.message ? { message: result.message, returned: !result.accepted ? prop.id : undefined } : null);
     if (result.accepted) {
       setLanded((ids) => ids.includes(prop.id) ? ids : [...ids, prop.id]);
       if (prop.pulse && target !== floorId && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -143,7 +144,7 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
           data-held={drag?.prop.id === prop.id ? true : undefined}
           data-keyboard={keyboard?.id === prop.id ? true : undefined}
           data-landed={landed.includes(prop.id) || undefined}
-          data-bumped={(feedback?.error && feedback.item === prop.id) || undefined}
+          data-bumped={feedback?.returned === prop.id || undefined}
           data-coaxial={Boolean(prop.mounted) || undefined}
           data-fitted={prop.fitted || undefined}
           data-clamp={Boolean(prop.mounted?.clamp) || undefined}
@@ -181,7 +182,6 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
         <div key={target.id} className="scene-drop" role="button" tabIndex={0} aria-label={target.label}
           data-scene-target={target.id}
           data-over={drag?.over === target.id ? true : undefined}
-          data-rejected={feedback?.error && feedback.target === target.id ? true : undefined}
           style={{
             left: target.x + "%", top: target.y + "%", width: target.width + "%", height: target.height + "%",
           }}
@@ -203,10 +203,8 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
   );
 }
 
-function SceneFeedback({ feedback }: { feedback: Feedback | null }) {
-  return <p className="scene-response" data-error={feedback?.error ? true : undefined} role="status" aria-live="polite">
-    {feedback?.message && <><Icon name={feedback.error ? "info" : "check"} size={17} />{feedback.message}</>}
-  </p>;
+function SceneFeedback({ feedback, greeting }: { feedback: Feedback | null; greeting: string }) {
+  return <CoachMessage className="scene-response" live>{feedback?.message ?? greeting}</CoachMessage>;
 }
 
 const rackPockets = rackRows.flatMap((weights, shelf) => weights.map((weight, pair) => {
@@ -253,6 +251,7 @@ export function DumbbellScene({ station, progress, submit }: Props & { station: 
 
   return (
     <div className="dumbbell-board">
+      <SceneFeedback feedback={feedback} greeting={stationDetails.DUMBBELLS.instruction} />
       <InteractionField name="gym-floor" props={props} targets={rackDropTargets} feedback={feedback} setFeedback={setFeedback}
         onDrop={(prop, destination) => submit({ kind: "place", stage: "DUMBBELLS", item: prop.id, destination })}>
         <img className="scene-backdrop" src={asset("rack-studio")} draggable={false}
@@ -266,7 +265,6 @@ export function DumbbellScene({ station, progress, submit }: Props & { station: 
           );
         })}
       </InteractionField>
-      <SceneFeedback feedback={feedback} />
     </div>
   );
 }
@@ -299,7 +297,7 @@ function onShaft(axial: number) {
 export function BarbellScene({ progress, submit }: Props) {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const assembly = progress.barbell;
-  const { totalKg, collarCount } = barbellLayout(assembly);
+  const { totalKg, collarCount, disksReady } = barbellLayout(assembly);
   const mounts = new Map<string, { side: BarbellSide; axial: number; thickness: number }>();
   for (const side of barbellSides) {
     const sign = side === "LEFT" ? -1 : 1;
@@ -342,12 +340,19 @@ export function BarbellScene({ progress, submit }: Props) {
 
   function verify() {
     const result = submit({ kind: "check-barbell" });
-    setFeedback(result.accepted ? null : { message: result.message, error: true });
+    setFeedback(result.accepted ? null : { message: result.message });
   }
 
   const shaft = barbellArt.parts["bar-shaft"];
   return (
     <div className="barbell-board">
+      <SceneFeedback feedback={feedback} greeting={disksReady
+        ? "Одинаковые диски уже на месте. Надень замки на концы грифа и закрой рычажки."
+        : stationDetails.BARBELL.instruction} />
+      <ol className="assembly-steps" aria-label="Порядок сборки">
+        <li data-state={disksReady ? "done" : "current"}><span>{disksReady ? <Icon name="check" size={16} /> : "1"}</span> Диски</li>
+        <li data-state={collarCount === 2 && disksReady ? "done" : disksReady ? "current" : "waiting"}><span>{collarCount === 2 && disksReady ? <Icon name="check" size={16} /> : "2"}</span> Замки</li>
+      </ol>
       <div className="barbell-mass">
         <div><span>Текущий вес</span><strong key={totalKg} data-current-weight={totalKg} aria-live="polite">{totalKg} кг</strong></div>
         <p>Цель <strong>{barbell.targetKg} кг</strong></p>
@@ -359,7 +364,7 @@ export function BarbellScene({ progress, submit }: Props) {
           style={{ left: onShaft(0).x + "%", top: onShaft(0).y + "%", width: shaft.width + "%",
             transform: "translate(" + -shaft.anchor[0] + "%," + -shaft.anchor[1] + "%)" }} />
         <div className="barbell-tray" aria-hidden="true">
-          {["5 кг", "10 кг", "20 кг", "Замки"].map((label) => <span key={label}>{label}</span>)}
+          {["5 кг", "10 кг", "20 кг", "Замки"].map((label, index) => <span key={label} data-next={index === 3 && disksReady || undefined}>{label}</span>)}
         </div>
         {barbellSides.map((side) => {
           const id = assembly.collars[side];
@@ -384,7 +389,6 @@ export function BarbellScene({ progress, submit }: Props) {
         <span>Гриф весит {barbell.shaftKg} кг</span>
         <span><Icon name="lock" size={14} /> Замки {collarCount}/2</span>
       </div>
-      <SceneFeedback feedback={feedback} />
       <SceneButton type="button" className="button primary assembly-check" onActivate={verify}>Проверить <Icon name="check" size={18} /></SceneButton>
     </div>
   );
@@ -426,9 +430,9 @@ export function InventoryScene({ station, progress, submit }: Props & { station:
   });
   return (
     <div className="inventory-board">
+      <SceneFeedback feedback={feedback} greeting={stationDetails.INVENTORY.instruction} />
       <InteractionField name="storage-floor" props={props} targets={zones} feedback={feedback} setFeedback={setFeedback}
         onDrop={(prop, destination) => submit({ kind: "place", stage: "INVENTORY", item: prop.id, destination })}>
-        <img className="scene-backdrop" src={sceneAsset("gym-floor")} alt="" draggable={false} />
         {zones.map((zone) => (
           <div className="storage-area" data-shade={zone.shade} data-full={zone.items.length === 2 || undefined} key={zone.id}
             style={{ left: zone.x + "%", top: zone.y + "%", width: zone.width + "%", height: zone.height + "%" }}>
@@ -436,7 +440,6 @@ export function InventoryScene({ station, progress, submit }: Props & { station:
           </div>
         ))}
       </InteractionField>
-      <SceneFeedback feedback={feedback} />
     </div>
   );
 }

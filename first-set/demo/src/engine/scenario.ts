@@ -61,10 +61,10 @@ export const barbell = {
 
 export const stations: readonly Station[] = contractStations.map((station) => {
   switch (station.stage) {
-    case "DUMBBELLS": return { ...station, title: "Гантели", items: dumbbells, targets: rackTargets };
-    case "BARBELL": return { ...station, title: "Штанга", items: barbell.props };
+    case "DUMBBELLS": return { ...station, title: "Верни гантели", items: dumbbells, targets: rackTargets };
+    case "BARBELL": return { ...station, title: "Собери штангу", items: barbell.props };
     case "BENCH": return {
-      ...station, title: "Настрой скамью",
+      ...station, title: "Помоги посетителю",
       items: [],
     };
     case "INVENTORY": return { ...station, title: "Освободи проход" };
@@ -80,31 +80,35 @@ export const stationTotal = (station: Station) => {
 export const stationDetails = {
   DUMBBELLS: {
     name: "Гантели",
-    instruction: "Верни три пары на стойку. Лёгкие гантели стоят сверху, тяжёлые снизу. На обеих полках вес растёт слева направо.",
+    mission: "Верни пары на стойку",
+    instruction: "Поможешь вернуть три пары? Следующему человеку будет проще найти свой вес. Лёгкие гантели ставим выше, на каждой полке вес растёт слева направо.",
     lessonTitle: "Гантели на месте",
     takeaway: "Лёгкие пары ставь выше, тяжёлые ниже. На каждой полке вес растёт слева направо.",
   },
   BARBELL: {
     name: "Штанга",
-    instruction: `Собери штангу на ${barbell.targetKg} кг. Учитывай вес пустого грифа. Надень одинаковые диски с обеих сторон и защёлкни замки.`,
+    mission: `Собери ${barbell.targetKg} кг`,
+    instruction: `К следующему подходу соберём ${barbell.targetKg} кг. Надень одинаковые диски с обеих сторон. Замки удерживают диски, поэтому ставим их последними.`,
     lessonTitle: "Штанга собрана",
-    takeaway: "Сверяй состав дисков с обеих сторон грифа и ставь замки.",
+    takeaway: "Набирай вес симметрично. Когда диски на месте, надень и защёлкни замки.",
   },
   BENCH: {
-    name: "Скамья",
-    instruction: "Посетитель готовится к жиму. Помоги выставить нужный наклон.",
+    name: "Помощь посетителю",
+    mission: "Настрой скамью",
     lessonTitle: "Скамья готова",
     takeaway: "Удерживай фиксатор, меняя наклон. В новом положении отпусти его и проверь фиксацию подушки.",
   },
   INVENTORY: {
     name: "Инвентарь",
-    instruction: "Давай освободим проход. Верни вещи в свои зоны, чтобы другим было удобно пройти к тренажёрам.",
+    mission: "Освободи проход",
+    instruction: "Инвентарь остался на полу после занятий. Поможешь разложить вещи по местам? Так к тренажёрам будет удобно пройти.",
     lessonTitle: "Проход свободен",
     takeaway: "После подхода верни инвентарь в зоны хранения.",
   },
 } satisfies Record<StationId, {
   name: string;
-  instruction: string;
+  mission: string;
+  instruction?: string;
   lessonTitle: string;
   takeaway: string;
 }>;

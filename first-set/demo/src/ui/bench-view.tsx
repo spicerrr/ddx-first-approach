@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } fr
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { benchNotches, type BenchNotch, type BenchPart } from "../engine/scenario";
+import { benchNotches, benchParts, type BenchNotch, type BenchPart } from "../engine/scenario";
 import { Equipment, Icon } from "./graphics";
 
 const clips = ["RaiseBackrest", "RaiseSeat", "PullBackrestPin", "ReleaseSeatLatch"] as const;
@@ -30,6 +30,7 @@ const controlsByPart = {
     cushion: { target: "SeatCushionTarget", label: "Регулировать сиденье", clip: "RaiseSeat" },
   },
 } as const;
+const cushionNames = { backrest: "BackrestCushion", seat: "SeatCushion" } as const;
 
 function disposeModel(model: THREE.Object3D) {
   const materials = new Set<THREE.MeshStandardMaterial>();
@@ -108,6 +109,9 @@ function createViewer(
 
   let model: THREE.Object3D | null = null;
   let mixer: THREE.AnimationMixer | null = null;
+  const ghostFill = new THREE.MeshBasicMaterial({ color: 0x00cec9, transparent: true, opacity: .24, depthWrite: false });
+  const ghostEdge = new THREE.LineBasicMaterial({ color: 0x078687, transparent: true, opacity: .85, depthWrite: false });
+  const ghosts = new Map<BenchPart, { cushion: THREE.Mesh; shape: THREE.Mesh; edge: THREE.EdgesGeometry }>();
   let closed = false;
   let frame = 0;
   let width = 1;
@@ -166,6 +170,7 @@ function createViewer(
     if (!model || !mixer) return;
     const { part, target: goal } = props();
     const controls = controlsByPart[part];
+    for (const { shape } of ghosts.values()) shape.visible = false;
     let latchPoint: Point | undefined;
     for (const kind of ["latch", "cushion"] as const) {
       const button = marker(kind);
@@ -196,6 +201,13 @@ function createViewer(
         const aim = screenPoint(target);
         halo.style.left = THREE.MathUtils.clamp((aim.x + 1) * width / 2, 25, width - 25) + "px";
         halo.style.top = THREE.MathUtils.clamp((1 - aim.y) * height / 2, 25, height - 25) + "px";
+        const ghost = ghosts.get(part);
+        if (ghost && (preview[controls.latch.clip] ?? 0) >= .78) {
+          ghost.cushion.updateWorldMatrix(true, false);
+          ghost.shape.matrix.copy(ghost.cushion.matrixWorld);
+          ghost.shape.matrixWorldNeedsUpdate = true;
+          ghost.shape.visible = true;
+        }
       }
       applyClip(clip, displayed[clip]);
       mixer.update(0);
@@ -264,6 +276,17 @@ function createViewer(
       return;
     }
     scene.add(model);
+    for (const part of benchParts) {
+      const cushion = model.getObjectByName(cushionNames[part])?.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
+      if (!cushion) continue;
+      const shape = new THREE.Mesh(cushion.geometry, ghostFill);
+      const edge = new THREE.EdgesGeometry(cushion.geometry, 16);
+      shape.add(new THREE.LineSegments(edge, ghostEdge));
+      shape.matrixAutoUpdate = false;
+      shape.visible = false;
+      scene.add(shape);
+      ghosts.set(part, { cushion, shape, edge });
+    }
     setStatus("ready");
     schedule();
   }, undefined, fail);
@@ -293,6 +316,9 @@ function createViewer(
         mixer?.uncacheRoot(model);
         disposeModel(model);
       }
+      for (const ghost of ghosts.values()) ghost.edge.dispose();
+      ghostFill.dispose();
+      ghostEdge.dispose();
       shadow.geometry.dispose();
       shadowMaterial.dispose();
       shadowTexture.dispose();

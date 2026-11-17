@@ -28,7 +28,7 @@ export async function activate(page: Page, name: string, touch = false) {
 }
 
 export async function begin(page: Page, touch = false) {
-  for (const name of ["Начать знакомство", "К маршруту", "Начать маршрут"]) await activate(page, name, touch);
+  for (const name of ["Начать знакомство", "Начать", "Пропустить", "Начать смену"]) await activate(page, name, touch);
 }
 
 export async function keyboardPlace(page: Page, [item, target]: readonly [string, string]) {
