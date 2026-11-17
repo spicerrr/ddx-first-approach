@@ -18,7 +18,7 @@ export default defineConfig({
   },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
-    { name: "touch", testIgnore: "**/responsive.spec.ts", use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 } },
+    { name: "touch", testIgnore: "**/responsive.spec.ts", use: { ...devices["Pixel 7"], viewport: { width: 402, height: 874 }, deviceScaleFactor: 1 } },
   ],
   webServer: remote ? undefined : {
     command: "npm run preview -- --host 127.0.0.1 --port 4173 --strictPort",

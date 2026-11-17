@@ -12,18 +12,20 @@ export type Station = {
 
 const contractStations = scenario.stages as readonly Station[];
 export const floorId = "FLOOR";
-export const rackTargets = [
-  { id: "RACK_LEFT", label: "Левая пара на стойке" },
-  { id: "RACK_MIDDLE", label: "Средняя пара на стойке" },
-  { id: "RACK_RIGHT", label: "Правая пара на стойке" },
-] as const;
+export const rackRows = [[2, 4, 6, 8], [10, 12, 14, 16]] as const;
+const rackWeights = [8, 12, 16];
+export const rackTargets = rackRows.flatMap((row, shelf) => Array.from(row).flatMap((weightKg, pair) =>
+  rackWeights.includes(weightKg) ? [{
+    id: `RACK_${weightKg}`, label: `Пара ${weightKg} кг на ${shelf === 0 ? "верхней" : "нижней"} полке`, weightKg, shelf, pair,
+  }] : [],
+));
 
 export const benchParts = ["backrest", "seat"] as const;
 export type BenchPart = typeof benchParts[number];
-export const benchPreparation = "UNLOADED";
-export const benchFinalCheck = "VERIFY_LOCK";
+export const benchNotches = [0, 1, 2, 3] as const;
+export type BenchNotch = typeof benchNotches[number];
 
-const dumbbells = [8, 12, 16].flatMap((weightKg) =>
+const dumbbells = rackWeights.flatMap((weightKg) =>
   ["A", "B"].map((copy) => ({
     id: `DB_${weightKg}_${copy}`,
     label: `Гантель ${weightKg} кг`,
@@ -61,7 +63,7 @@ export const stations: readonly Station[] = contractStations.map((station) => {
     case "BARBELL": return { ...station, title: "Штанга", items: barbell.props };
     case "BENCH": return {
       ...station, title: "Настрой скамью",
-      items: station.items.filter(({ id }) => id === benchPreparation || id === benchFinalCheck),
+      items: [],
     };
     case "INVENTORY": return { ...station, title: "Освободи проход" };
   }
@@ -76,37 +78,32 @@ export const stationTotal = (station: Station) => {
 export const stationDetails = {
   DUMBBELLS: {
     name: "Гантели",
-    instruction: "После подхода верни гантели на стойку. Так следующий человек легко найдёт пару. Посмотри на цифры на торцах и перетащи одинаковые гантели рядом.",
+    instruction: "Наверху стоят лёгкие гантели, внизу — тяжёлые. На каждой полке вес растёт слева направо. Верни три пары на свои места.",
     lessonTitle: "Гантели на месте",
-    lesson: "Все три пары на стойке. Теперь нужный вес легко найти, а проход свободен.",
-    takeaway: "Возвращай гантели на стойку. Собирай одинаковые веса в пары.",
+    takeaway: "Лёгкие пары ставь выше, тяжёлые ниже. На каждой полке вес растёт слева направо.",
   },
   BARBELL: {
     name: "Штанга",
-    instruction: `Собери учебные ${barbell.targetKg} кг. Перетащи одинаковые диски на обе стороны грифа, затем надень два замка.`,
+    instruction: `В зале часто работают со свободными весами. Давай соберём штангу на ${barbell.targetKg} кг. Надень одинаковые диски с двух сторон и защёлкни замки.`,
     lessonTitle: "Штанга собрана",
-    lesson: `Получилось ${barbell.targetKg} кг. Диски с обеих сторон совпадают, замки на месте.`,
     takeaway: "Сверяй состав дисков с обеих сторон грифа и ставь замки.",
   },
   BENCH: {
     name: "Скамья",
-    instruction: "Спинка и сиденье регулируются отдельно. Найди оба фиксатора на учебной скамье и подготовь её к подходу.",
+    instruction: "Посмотри, как удерживать фиксатор и менять наклон. Затем попробуй регулировку на модели.",
     lessonTitle: "Скамья готова",
-    lesson: "Спинка и сиденье закреплены, опора устойчива. В клубе уточни устройство конкретной модели у тренера.",
-    takeaway: "После регулировки проверь фиксацию спинки, сиденья и устойчивость скамьи.",
+    takeaway: "Удерживай фиксатор, меняя наклон. В новом положении отпусти его и проверь фиксацию подушки.",
   },
   INVENTORY: {
     name: "Инвентарь",
     instruction: "Давай освободим проход. Верни вещи в свои зоны, чтобы другим было удобно пройти к тренажёрам.",
     lessonTitle: "Проход свободен",
-    lesson: "Все предметы на местах. Можно свободно пройти к оборудованию.",
     takeaway: "После подхода верни инвентарь в зоны хранения.",
   },
 } satisfies Record<StationId, {
   name: string;
   instruction: string;
   lessonTitle: string;
-  lesson: string;
   takeaway: string;
 }>;
 

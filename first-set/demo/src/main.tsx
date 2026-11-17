@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { newProgress, nextStation, start, stationProgress, submit, type Action } from "./engine/game";
 import { stationDetails, stations, stationTotal } from "./engine/scenario";
-import { BenchChecks } from "./ui/bench";
+import { BenchStation } from "./ui/bench";
 import { Icon } from "./ui/graphics";
 import { BarbellScene, DumbbellScene, InventoryScene } from "./ui/gym";
-import { Briefing, Finish, Lesson, Route, SceneResult, Skip, TrainingInfo, type Training } from "./ui/screens";
+import { Briefing, Finish, Route, SceneResult, Skip, TrainingInfo, type Training } from "./ui/screens";
 import { ClubAction, ClubCalendar, ClubHeader, ClubNavigation, Home, type ClubTab } from "./ui/home";
 import { SceneButton } from "./ui/scene-button";
 import "./style.css";
@@ -25,10 +25,20 @@ function App() {
   const lesson = play && session.phase === "lesson";
   const complete = play && session.phase === "complete";
   const spatial = station.stage !== "BENCH";
-  const sceneResult = lesson && spatial;
+  const sceneResult = lesson;
   const stageHeader = play && !complete;
   const stationScreen = play && (session.phase === "playing" || sceneResult);
   const clubTab = view === "home" || view === "calendar" || view === "action" ? view : null;
+
+  useEffect(() => {
+    function sizePreview() {
+      const scale = Math.max(.25, Math.min(1, (window.innerHeight - 32) / 888, (window.innerWidth - 32) / 416));
+      screen.current?.style.setProperty("--phone-scale", String(scale));
+    }
+    sizePreview();
+    window.addEventListener("resize", sizePreview);
+    return () => window.removeEventListener("resize", sizePreview);
+  }, []);
 
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
@@ -79,7 +89,7 @@ function App() {
   }
 
   return (
-    <div className={"app" + (clubTab ? " app-club" : "") + (lesson && !sceneResult ? " app-lesson" : "") + (complete ? " app-finish" : "")} ref={screen}>
+    <div className={"app" + (clubTab ? " app-club" : "") + (complete ? " app-finish" : "")} ref={screen}>
       {clubTab ? <ClubHeader home={home} /> : stageHeader ? (
         <header className="scene-header shell" inert={sceneResult}>
           <SceneButton type="button" className="button quiet scene-route" onActivate={() => setView("route")} disabled={lesson}>
@@ -88,7 +98,7 @@ function App() {
           <div className="scene-journey" aria-label={"Станция " + (session.stageIndex + 1) + " из " + stations.length}>
             <span>Станция {session.stageIndex + 1} из {stations.length}</span>
             <div aria-hidden="true">{stations.map((step, index) =>
-              <i key={step.stage} data-step={index < session.stageIndex ? "done" : index === session.stageIndex ? "active" : undefined} />,
+              <i key={step.stage} data-step={index < session.stageIndex || index === session.stageIndex && lesson ? "done" : index === session.stageIndex ? "active" : undefined} />,
             )}</div>
           </div>
           <SceneButton type="button" className="button quiet scene-close" onActivate={closeApproach} aria-label="Выйти"><Icon name="close" size={22} /></SceneButton>
@@ -116,7 +126,6 @@ function App() {
         {view === "skip" && <Skip heading={heading} back={home} training={() => openTraining("smart-start")} />}
         {view === "training" && <TrainingInfo heading={heading} active={training.target} back={() => setView(training.from)} />}
 
-        {lesson && !sceneResult && <Lesson heading={heading} index={session.stageIndex} next={advance} />}
         {complete && <Finish heading={heading} training={openTraining} home={home} />}
         {stationScreen && (
           <section className={"game" + (spatial ? " game-spatial" : "")} key={station.stage}>
@@ -132,7 +141,7 @@ function App() {
               </div>
               {station.stage === "DUMBBELLS" && <DumbbellScene station={station} progress={session} submit={action} />}
               {station.stage === "BARBELL" && <BarbellScene progress={session} submit={action} />}
-              {station.stage === "BENCH" && <BenchChecks station={station} progress={session} submit={action} />}
+              {station.stage === "BENCH" && <BenchStation progress={session} submit={action} />}
               {station.stage === "INVENTORY" && <InventoryScene station={station} progress={session} submit={action} />}
               <div className="stage-footer">
                 <SceneButton type="button" className="button quiet training-link" onActivate={() => openTraining("smart-start")}>Smart Start <Icon name="external" size={17} /></SceneButton>

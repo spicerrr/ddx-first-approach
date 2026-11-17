@@ -6,9 +6,9 @@ export const dropTarget = (page: Page, id: string) => page.locator('[data-scene-
 
 export const placements = {
   dumbbells: [
-    ["DB_8_A", "RACK_LEFT"], ["DB_8_B", "RACK_LEFT"],
-    ["DB_12_A", "RACK_MIDDLE"], ["DB_12_B", "RACK_MIDDLE"],
-    ["DB_16_A", "RACK_RIGHT"], ["DB_16_B", "RACK_RIGHT"],
+    ["DB_8_A", "RACK_8"], ["DB_8_B", "RACK_8"],
+    ["DB_12_A", "RACK_12"], ["DB_12_B", "RACK_12"],
+    ["DB_16_A", "RACK_16"], ["DB_16_B", "RACK_16"],
   ],
   barbell: [
     ["DISK_10_A", "LEFT"], ["DISK_10_B", "RIGHT"],
@@ -43,7 +43,7 @@ export async function dragProp(page: Page, [item, target]: readonly [string, str
   const from = await source.evaluate((node) => {
     const box = node.getBoundingClientRect();
     for (const py of [.5, .42, .56, .66, .34, .22, .78]) {
-      for (const px of [.5, .64, .35, .79, .23]) {
+      for (const px of [.5, .64, .35, .79, .23, .89, .11, .95, .05]) {
         const x = box.left + box.width * px, y = box.top + box.height * py;
         if (document.elementFromPoint(x, y)?.closest("[data-scene-item]") === node) return { x, y };
       }
@@ -75,36 +75,71 @@ export async function noOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
 }
 
-export const benchControls = [
-  "Вытянуть штифт", "Поднять спинку до 30°", "Проверить спинку",
-  "Освободить фиксатор сиденья", "Поднять сиденье до 12°", "Проверить сиденье",
-] as const;
+export async function openBench(page: Page, touch = false) {
+  await activate(page, "Посмотреть сиденье", touch);
+  await activate(page, "Попробовать на скамье", touch);
+  await expect(page.locator(".bench-view")).toHaveAttribute("data-model", "ready");
+}
 
-export async function moveBenchPart(page: Page, label: string, touch: boolean, distance = 58) {
-  const marker = button(page, `На модели: ${label}`);
-  await expect(marker).toBeVisible();
-  await marker.scrollIntoViewIfNeeded();
-  const bounds = (await marker.boundingBox())!;
-  const angle = await marker.evaluate((el) => Number.parseFloat(el.style.getPropertyValue("--gesture-angle")));
-  expect(Number.isFinite(angle)).toBe(true);
-  const x = bounds.x + bounds.width / 2;
-  const y = bounds.y + bounds.height / 2;
-  const dx = distance * Math.cos(angle);
-  const dy = distance * Math.sin(angle);
+export async function keyboardBench(page: Page, direction = "ArrowUp") {
+  await page.locator(".bench-view").focus();
+  await page.keyboard.down("Space");
+  await page.keyboard.press(direction);
+  await page.keyboard.up("Space");
+}
+
+type Finger = { x: number; y: number; id: number };
+
+export async function adjustBench(page: Page, touch: boolean, held: boolean, distance = 61) {
+  const view = page.locator(".bench-view");
+  await expect(view).toHaveAttribute("data-model", "ready");
+  async function mark(control: "latch" | "cushion", id: number, span: number) {
+    const target = view.locator('[data-bench-control="' + control + '"]');
+    await target.scrollIntoViewIfNeeded();
+    await expect(target).toBeVisible();
+    const box = (await target.boundingBox())!;
+    const angle = await target.evaluate((node) => parseFloat(node.style.getPropertyValue("--gesture-angle")));
+    expect(Number.isFinite(angle)).toBe(true);
+    return {
+      start: { x: box.x + box.width / 2, y: box.y + box.height / 2, id },
+      offset: { x: Math.cos(angle) * span, y: Math.sin(angle) * span },
+    };
+  }
+
   if (touch) {
     const cdp = await page.context().newCDPSession(page);
-    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
-    for (let step = 1; step <= 7; step += 1) {
-      await cdp.send("Input.dispatchTouchEvent", {
-        type: "touchMove", touchPoints: [{ x: x + dx * step / 7, y: y + dy * step / 7 }],
-      });
+    const fingers: Finger[] = [];
+    async function drag(control: "latch" | "cushion", id: number, span: number) {
+      const { start, offset } = await mark(control, id, span);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [...fingers, start] });
+      let end = start;
+      for (let index = 1; index <= 6; index++) {
+        end = { id, x: start.x + offset.x * index / 6, y: start.y + offset.y * index / 6 };
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [...fingers, end] });
+      }
+      fingers.push(end);
     }
-    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-    await cdp.detach();
+    try {
+      if (held) {
+        await drag("latch", 1, 31);
+        await expect(view).toHaveAttribute("data-unlocked", "true");
+      }
+      await drag("cushion", 2, distance);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    } finally {
+      await cdp.detach();
+    }
   } else {
-    await page.mouse.move(x, y);
+    const { start, offset } = await mark("cushion", 2, distance);
+    if (held) {
+      await view.focus();
+      await page.keyboard.down("Space");
+      await expect(view).toHaveAttribute("data-unlocked", "true");
+    }
+    await page.mouse.move(start.x, start.y);
     await page.mouse.down();
-    await page.mouse.move(x + dx, y + dy, { steps: 7 });
+    await page.mouse.move(start.x + offset.x, start.y + offset.y, { steps: 8 });
     await page.mouse.up();
+    if (held) await page.keyboard.up("Space");
   }
 }

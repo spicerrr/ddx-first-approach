@@ -22,6 +22,8 @@ const iconPaths = {
   play: <><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4Z"/></>,
   bell: <><path d="M18 8a6 6 0 1 0-12 0c0 6-3 7-3 9h18c0-2-3-3-3-9M10 21h4"/></>,
   chevron: <path d="m9 6 6 6-6 6"/>,
+  lock: <><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 1 1 8 0v4"/></>,
+  unlock: <><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.4-2.1"/></>,
   gym: <><path d="M7 5v14m10-14v14M4 8v8m16-8v8M7 12h10"/></>,
   bench: <><path d="m9 12 8-8m-8 8H4m5 0-3 7m3-7 9 7m-15 0h6m6 0h6"/></>,
   storage: <><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/></>,

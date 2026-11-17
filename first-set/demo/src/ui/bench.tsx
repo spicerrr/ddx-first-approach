@@ -1,231 +1,101 @@
-import { lazy, Suspense, useRef, useState } from "react";
-import { benchTask, type Action, type Progress, type Result } from "../engine/game";
-import { benchFinalCheck, benchParts, benchPreparation, type BenchPart, type Station } from "../engine/scenario";
-import type { BenchClip, BenchGesture, BenchPose } from "./bench-view";
-import { Equipment, Icon } from "./graphics";
+import { lazy, Suspense, useState } from "react";
+import type { Action, Progress, Result } from "../engine/game";
+import { benchNotches, benchParts, type BenchPart } from "../engine/scenario";
+import type { BenchPose } from "./bench-view";
+import { CheckBurst } from "./celebration";
+import { asset, Equipment, Icon } from "./graphics";
 import { SceneButton } from "./scene-button";
 
 const BenchView = lazy(() => import("./bench-view"));
 
-type Motion = "release" | "raise" | "verify";
-type Step = "identify" | Motion;
-type Exercise = {
-  label: string;
-  position: string;
-  latch: { clip: BenchClip; target: string };
-  cushion: { clip: BenchClip; target: string };
-  steps: Record<Motion, { title: string; detail: string; button: string }>;
-};
-
-const exercises: Record<BenchPart, Exercise> = {
+const exercises = {
   backrest: {
-    label: "Спинка",
-    position: "Учебный наклон 30°",
-    latch: { clip: "PullBackrestPin", target: "BackrestPinTarget" },
-    cushion: { clip: "RaiseBackrest", target: "BackrestCushionTarget" },
-    steps: {
-      release: {
-        title: "Вытяни жёлтый штифт",
-        detail: "Потяни штифт спинки в сторону от рамы по стрелке.",
-        button: "Вытянуть штифт",
-      },
-      raise: {
-        title: "Подними спинку",
-        detail: "Потяни спинку вверх до конца стрелки. В новом положении штифт вернётся на место.",
-        button: "Поднять спинку до 30°",
-      },
-      verify: {
-        title: "Проверь фиксацию спинки",
-        detail: "Потяни спинку вверх ещё раз. Зафиксированная спинка останется на месте.",
-        button: "Проверить спинку",
-      },
-    },
+    title: "Спинка",
+    action: "Потяни жёлтый штифт. Удерживая его, измени наклон спинки. Отпусти штифт, чтобы зафиксировать положение.",
+    alt: "Выдвинутый штифт удерживается при подъёме спинки и возвращается при отпускании.",
+    maximum: 30,
   },
   seat: {
-    label: "Сиденье",
-    position: "Учебный наклон 12°",
-    latch: { clip: "ReleaseSeatLatch", target: "SeatLatchTarget" },
-    cushion: { clip: "RaiseSeat", target: "SeatCushionTarget" },
-    steps: {
-      release: {
-        title: "Освободи фиксатор сиденья",
-        detail: "Потяни тонкий П-образный рычаг под цилиндрической ручкой по стрелке.",
-        button: "Освободить фиксатор сиденья",
-      },
-      raise: {
-        title: "Подними сиденье",
-        detail: "Потяни свободный край вверх до конца стрелки. В новом положении рычаг вернётся на место.",
-        button: "Поднять сиденье до 12°",
-      },
-      verify: {
-        title: "Проверь фиксацию сиденья",
-        detail: "Потяни сиденье вверх ещё раз. Зафиксированное сиденье останется на месте.",
-        button: "Проверить сиденье",
-      },
-    },
+    title: "Сиденье",
+    action: "Отведи П-образный рычаг под сиденьем. Удерживая рычаг, измени наклон подушки. Отпусти рычаг для фиксации.",
+    alt: "П-образный рычаг остаётся открытым при подъёме сиденья и возвращается при отпускании.",
+    maximum: 12,
   },
 };
 
-const stepNumber = { identify: 1, release: 1, raise: 2, verify: 3 };
-const mechanisms = [
-  { id: "backrest", label: "Жёлтый штифт", use: "Жёлтый штифт освобождает спинку." },
-  { id: "handle", label: "Цилиндрическая ручка", use: "Ручка нужна, чтобы перемещать скамью." },
-  { id: "seat", label: "П-образный рычаг", use: "П-образный рычаг освобождает сиденье." },
-] as const;
+type Demo = { part: BenchPart; firstVisit: boolean };
+const demoSource = (part: BenchPart) => import.meta.env.BASE_URL + "art/bench-" + part + ".gif";
+const lastNotch = benchNotches.length - 1;
 
-const checks = {
-  [benchPreparation]: {
-    title: "Что сделаешь перед настройкой?",
-    detail: "На подушке осталась гантель.",
-    options: [
-      { id: "adjust-first", label: "Сразу изменить наклон" },
-      { id: benchPreparation, label: "Убрать гантель" },
-      { id: "sit-first", label: "Сесть на скамью" },
-    ],
-  },
-  [benchFinalCheck]: {
-    title: "Проверь скамью перед подходом",
-    detail: "Обе подушки закреплены. Что ещё нужно проверить?",
-    options: [
-      { id: "finish-now", label: "Сразу начать подход" },
-      { id: benchFinalCheck, label: "Проверить устойчивость" },
-    ],
-  },
-};
+export function BenchStation({ progress, submit }: { progress: Progress; submit: (action: Action) => Result }) {
+  const [part, setPart] = useState<BenchPart>(() => progress.benchAdjustments.includes("backrest") ? "seat" : "backrest");
+  const [demo, setDemo] = useState<Demo | null>(() => progress.benchAdjustments.length ? null : { part: "backrest", firstVisit: true });
+  const complete = benchParts.every((item) => progress.benchAdjustments.includes(item));
 
-export function BenchChecks({ station, progress, submit }: {
-  station: Station;
-  progress: Progress;
-  submit: (action: Action) => Result;
-}) {
-  const [step, setStep] = useState<Step>("identify");
-  const [hint, setHint] = useState(false);
-  const [feedback, setFeedback] = useState<{ text: string; error?: boolean } | null>(null);
-  const guide = useRef<HTMLDivElement>(null);
-  const task = benchTask(progress, station)!;
-  const part = task.kind === "adjust" ? task.part : undefined;
-  const exercise = part ? exercises[part] : undefined;
-  const instruction = exercise && step !== "identify" ? exercise.steps[step] : undefined;
-  const check = task.kind === "check"
-    ? checks[task.check.id === benchFinalCheck ? benchFinalCheck : benchPreparation]
-    : undefined;
+  if (demo) {
+    const exercise = exercises[demo.part];
+    const nextDemo = demo.firstVisit && demo.part === "backrest";
+    return (
+      <section className="bench-station bench-demo" aria-labelledby="bench-demo-title">
+        <picture className="bench-demo-visual" key={demo.part}>
+          <source media="(prefers-reduced-motion: reduce)" srcSet={asset("bench-" + demo.part + "-still")} />
+          <img src={demoSource(demo.part)} alt={exercise.alt} width={376} height={223} />
+        </picture>
+        <div className="bench-lesson-copy">
+          <h2 id="bench-demo-title">{exercise.title}</h2>
+          <p>{exercise.action}</p>
+        </div>
+        <SceneButton type="button" className="button primary" onActivate={() => {
+          if (nextDemo) setDemo({ part: "seat", firstVisit: true });
+          else setDemo(null);
+        }}>
+          {nextDemo ? "Посмотреть сиденье" : "Попробовать на скамье"} <Icon name="arrow" size={17} />
+        </SceneButton>
+      </section>
+    );
+  }
 
-  const isRaised = (id: BenchPart) => progress.benchAdjustments.includes(id) || part === id && step === "verify";
+  const { backrest, seat } = progress.benchPositions;
   const pose: BenchPose = {
-    RaiseBackrest: Number(isRaised("backrest")),
-    RaiseSeat: Number(isRaised("seat")),
-    PullBackrestPin: Number(part === "backrest" && step === "raise"),
-    ReleaseSeatLatch: Number(part === "seat" && step === "raise"),
+    RaiseBackrest: backrest / lastNotch,
+    RaiseSeat: seat / lastNotch,
+    PullBackrestPin: 0,
+    ReleaseSeatLatch: 0,
   };
 
-  function keepFocus(keyboard = false) {
-    if (keyboard) {
-      requestAnimationFrame(() => guide.current?.querySelector("button")?.focus({ preventScroll: true }));
-    }
-  }
-
-  function checkStep(id: string, keyboard: boolean) {
-    const result = submit({ kind: "bench", check: id });
-    setFeedback({ text: result.message, error: !result.accepted });
-    if (result.accepted) keepFocus(keyboard);
-  }
-
-  function chooseMechanism(choice: typeof mechanisms[number], keyboard: boolean) {
-    if (choice.id !== part) {
-      setFeedback({ text: choice.use, error: true });
-      return;
-    }
-    setStep("release");
-    setHint(false);
-    setFeedback(null);
-    keepFocus(keyboard);
-  }
-
-  function adjust(keyboard = false) {
-    if (!part) return;
-    if (step === "release" || step === "identify") {
-      setStep("raise");
-      setHint(false);
-      setFeedback({ text: "Фиксатор открыт." });
-    } else if (step === "raise") {
-      setStep("verify");
-      setFeedback({ text: "Фиксатор вернулся на место." });
-    } else {
-      const result = submit({ kind: "bench-adjustment", part });
-      if (result.accepted) setStep("identify");
-      setFeedback(result.accepted
-        ? { text: part === "backrest" ? "Фиксация спинки проверена." : "Фиксация сиденья проверена." }
-        : { text: result.message, error: true });
-    }
-    keepFocus(keyboard);
-  }
-
-  const atLatch = step === "identify" || step === "release";
-  const gesture: BenchGesture | null = exercise && (instruction || hint) ? {
-    target: atLatch ? exercise.latch.target : exercise.cushion.target,
-    label: (instruction ?? exercise.steps.release).button,
-    clip: atLatch ? exercise.latch.clip : step === "raise" ? exercise.cushion.clip : undefined,
-    onFinish: () => adjust(),
-  } : null;
-
-  const findLatch = exercise && step === "identify";
-  const title = check?.title ?? instruction?.title ?? (part === "backrest" ? "Найди фиксатор спинки" : "Найди фиксатор сиденья");
-  const detail = check?.detail ?? instruction?.detail ?? "Осмотри скамью и выбери деталь, которая освобождает подушку.";
-
   return (
-    <div className="bench-station">
+    <section className="bench-station bench-practice" data-bench-part={part} data-sandbox={complete || undefined}>
+      <div className="bench-parts" aria-label="Подушки скамьи">
+        {benchParts.map((item) => (
+          <SceneButton key={item} type="button" aria-pressed={part === item} onActivate={() => setPart(item)}>
+            {progress.benchAdjustments.includes(item) && <Icon name="check" size={16} />}
+            {exercises[item].title}
+          </SceneButton>
+        ))}
+      </div>
       <div className="play-scene scene-bench">
-        <Suspense fallback={<div className="bench-view"><div className="bench-view-placeholder">
-          <Equipment name="bench" alt="Регулируемая скамья" />
-          <p role="status">Загружается 3D-модель…</p>
-        </div></div>}>
-          <BenchView pose={pose} part={part} gesture={gesture} />
+        <Suspense fallback={<div className="bench-view"><Equipment name="bench" alt="Регулируемая скамья" /></div>}>
+          <BenchView part={part} pose={pose} notch={progress.benchPositions[part]}
+            onAdjust={(notch) => submit({ kind: "bench-adjustment", part, notch })} />
         </Suspense>
-        <ol className="bench-parts" aria-label="Подушки скамьи">
-          {benchParts.map((id) => (
-            <li key={id} aria-current={id === part ? "step" : undefined}>
-              {progress.benchAdjustments.includes(id) && <Icon name="check" size={16} />}
-              {exercises[id].label}
-            </li>
-          ))}
-        </ol>
+        {complete && <CheckBurst className="bench-achievement" label="Обе подушки отрегулированы" />}
       </div>
-      <div className="bench-guide" ref={guide}>
-        <div className="bench-step-heading">
-          <span className="bench-icon"><Icon name="bench" size={24} /></span>
-          <div>
-            {exercise && <p className="accent-label">{exercise.label} · шаг {stepNumber[step]} из 3</p>}
-            <h2>{title}</h2>
-          </div>
-        </div>
-        <p id="bench-detail">{detail}</p>
-        {exercise && <p className="bench-position">{exercise.position}</p>}
-        {check && (
-          <div className="bench-options">
-            {check.options.map(({ id, label }) => (
-              <SceneButton key={id} className="button ghost" type="button" onActivate={(keyboard) => checkStep(id, keyboard)}>{label}</SceneButton>
-            ))}
-          </div>
-        )}
-        {findLatch && (
-          <div className="bench-options">
-            {mechanisms.map((choice) => (
-              <SceneButton key={choice.id} className={`button ${hint && part === choice.id ? "primary" : "ghost"}`} type="button"
-                onActivate={(keyboard) => chooseMechanism(choice, keyboard)}>{choice.label}</SceneButton>
-            ))}
-            <SceneButton className="button quiet" type="button" onActivate={() => {
-              setHint(true);
-              setFeedback(null);
-            }}>Подсказка</SceneButton>
-          </div>
-        )}
-        {instruction && <SceneButton type="button" className="button primary" aria-describedby="bench-detail" onActivate={adjust}>
-          {instruction.button} <Icon name="arrow" />
+      <div className="bench-angle" role="status" aria-live="polite">
+        <span>{exercises[part].title}</span>
+        <strong>{progress.benchPositions[part] * exercises[part].maximum / lastNotch}°</strong>
+      </div>
+      <p className="bench-operation" id="bench-operation">
+        <span className="bench-touch-help">Отведи фиксатор одним пальцем и удерживай. Другим пальцем перетащи подушку, затем отпусти фиксатор.</span>
+        <span className="bench-key-help">Удерживай пробел и перетащи подушку мышью или меняй угол стрелками. Отпусти пробел для фиксации.</span>
+      </p>
+      <div className="bench-practice-actions">
+        <SceneButton type="button" className="button ghost" onActivate={() => setDemo({ part, firstVisit: false })}>
+          Показать приём <Icon name="play" size={17} />
+        </SceneButton>
+        {complete && <SceneButton type="button" className="button primary" onActivate={() => submit({ kind: "finish-bench" })}>
+          Следующая станция <Icon name="arrow" size={17} />
         </SceneButton>}
-        <p className={`bench-feedback${feedback?.error ? " bench-error" : ""}`} role="status" aria-live="polite">
-          {feedback?.text ?? ""}
-        </p>
       </div>
-    </div>
+    </section>
   );
 }

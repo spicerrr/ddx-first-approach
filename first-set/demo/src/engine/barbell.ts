@@ -3,12 +3,13 @@ import { barbell, barbellSides, floorId, type BarbellSide } from "./scenario";
 export type BarbellAssembly = {
   disks: Record<BarbellSide, readonly string[]>;
   collars: Partial<Record<BarbellSide, string>>;
+  locked: Partial<Record<BarbellSide, true>>;
 };
 
 export type BarbellDestination = BarbellSide | typeof floorId;
 
 export function newAssembly(): BarbellAssembly {
-  return { disks: { LEFT: ["DISK_20_A"], RIGHT: ["DISK_20_B"] }, collars: {} };
+  return { disks: { LEFT: ["DISK_20_A"], RIGHT: ["DISK_20_B"] }, collars: {}, locked: {} };
 }
 
 export function moveBarbell(assembly: BarbellAssembly, id: string, destination: BarbellDestination) {
@@ -25,6 +26,7 @@ export function moveBarbell(assembly: BarbellAssembly, id: string, destination: 
   if (source === target) return reject("");
 
   if (prop.kind === "collar") {
+    if (source && assembly.locked[source]) return reject("Открой защёлку на замке, затем сдвинь его в лоток.");
     if (target && assembly.collars[target]) return reject("На этой стороне уже есть замок.");
     const collars = { ...assembly.collars };
     if (source) delete collars[source];
@@ -32,7 +34,7 @@ export function moveBarbell(assembly: BarbellAssembly, id: string, destination: 
     return {
       accepted: true as const,
       assembly: { ...assembly, collars },
-      message: target ? "Замок на месте." : "Замок снят. Теперь диски можно переставить.",
+      message: "",
     };
   }
 
@@ -52,6 +54,14 @@ export function moveBarbell(assembly: BarbellAssembly, id: string, destination: 
   return { accepted: true as const, assembly: { ...assembly, disks }, message: "" };
 }
 
+export function toggleCollar(assembly: BarbellAssembly, side: BarbellSide): BarbellAssembly | null {
+  if (!assembly.collars[side]) return null;
+  const locked = { ...assembly.locked };
+  if (locked[side]) delete locked[side];
+  else locked[side] = true;
+  return { ...assembly, locked };
+}
+
 export function barbellLayout(assembly: BarbellAssembly) {
   const weights = (side: BarbellSide) => barbell.props.flatMap((item) =>
     item.kind === "disk" && assembly.disks[side].includes(item.id) ? [item.weightKg] : [],
@@ -64,7 +74,7 @@ export function barbellLayout(assembly: BarbellAssembly) {
     leftKg, rightKg,
     totalKg: barbell.shaftKg + leftKg + rightKg,
     symmetric: left.length === right.length && left.every((kg, index) => kg === right[index]),
-    collarCount: barbellSides.filter((side) => assembly.collars[side]).length,
+    collarCount: barbellSides.filter((side) => assembly.locked[side]).length,
   };
 }
 
@@ -80,7 +90,8 @@ export function checkBarbell(assembly: BarbellAssembly) {
     return { accepted: false, message: "Вес сторон совпал. Подбери одинаковые наборы дисков для обеих сторон." };
   }
   if (collarCount !== 2) {
-    return { accepted: false, message: collarCount ? "Осталось надеть второй замок." : "Вес собран. Надень по замку на каждый конец грифа." };
+    const mounted = barbellSides.filter((side) => assembly.collars[side]).length;
+    return { accepted: false, message: mounted === 2 ? "Нажми на рычажок каждого открытого замка, чтобы защёлкнуть его." : "Надень по замку на каждый конец грифа, затем защёлкни оба замка." };
   }
   return { accepted: true, message: "" };
 }

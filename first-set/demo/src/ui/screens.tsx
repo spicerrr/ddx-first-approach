@@ -1,8 +1,9 @@
 import type { Ref } from "react";
-import { lastStation, stationDetails, stations, type StationId } from "../engine/scenario";
+import { stationDetails, stations, type StationId } from "../engine/scenario";
 import type { Progress } from "../engine/game";
 import { Equipment, Icon, sceneAsset, type ArtName, type IconName } from "./graphics";
 import { SceneButton } from "./scene-button";
+import { CheckBurst, Confetti } from "./celebration";
 
 type Heading = Ref<HTMLHeadingElement>;
 export type Training = "smart-start" | "intro";
@@ -63,36 +64,13 @@ export function Route({ heading, progress, begin }: { heading: Heading; progress
   );
 }
 
-export function Lesson({ heading, index, next }: { heading: Heading; index: number; next: () => void }) {
-  const station = stations[index];
-  const detail = stationDetails[station.stage];
-  const final = index === lastStation;
-  return (
-    <section className={`lesson lesson-${station.stage.toLowerCase()}`}>
-      <div className="lesson-visual" aria-hidden="true">
-        <Equipment name={stationArt[station.stage]} />
-      </div>
-      <div className="lesson-copy">
-        <span className="success-symbol"><Icon name="check" size={30} /></span>
-        <p className="accent-label">Станция {index + 1} из {stations.length} пройдена</p>
-        <h1 ref={heading} tabIndex={-1}>{detail.lessonTitle}</h1>
-        <p className="intro-text">{detail.lesson}</p>
-        <SceneButton type="button" className="button primary" onActivate={next}>
-          {final ? "К результату" : "Следующая станция"} <Icon name="arrow" />
-        </SceneButton>
-      </div>
-    </section>
-  );
-}
-
 export function SceneResult({ heading, stage, next }: { heading: Heading; stage: StationId; next: () => void }) {
   const detail = stationDetails[stage];
   return (
     <div className="scene-result" role="dialog" aria-modal="true" aria-labelledby="scene-result-title">
       <section className="scene-result-card">
-        <span className="success-symbol"><Icon name="check" size={29} /></span>
-        <h1 id="scene-result-title" tabIndex={-1} ref={heading}>{detail.lessonTitle}</h1>
-        <p>{detail.lesson}</p>
+        <h1 id="scene-result-title" className="sr-only" tabIndex={-1} ref={heading}>{detail.lessonTitle}</h1>
+        <CheckBurst />
         <SceneButton type="button" className="button primary" onActivate={next}>{stage === "INVENTORY" ? "К результату" : "Следующая станция"} <Icon name="arrow" /></SceneButton>
       </section>
     </div>
@@ -106,8 +84,9 @@ export function Finish({ heading, training, home }: {
 }) {
   return (
     <section className="finish">
+      <Confetti />
       <div>
-        <span className="success-symbol finish-symbol"><Icon name="check" size={32} /></span>
+        <CheckBurst className="finish-symbol" />
         <h1 ref={heading} tabIndex={-1}>Первый подход<br /><span>завершён</span></h1>
         <p className="intro-text">В зале можно продолжить знакомство с оборудованием вместе с тренером.</p>
         <div className="finish-actions">
