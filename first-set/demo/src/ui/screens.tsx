@@ -2,6 +2,7 @@ import type { Ref } from "react";
 import { lastStation, stationDetails, stations, type StationId } from "../engine/scenario";
 import type { Progress } from "../engine/game";
 import { Equipment, Icon, sceneAsset, type ArtName, type IconName } from "./graphics";
+import { SceneButton } from "./scene-button";
 
 type Heading = Ref<HTMLHeadingElement>;
 export type Training = "smart-start" | "intro";
@@ -111,7 +112,7 @@ export function SceneResult({ heading, stage, next }: { heading: Heading; stage:
         <span className="success-symbol"><Icon name="check" size={29} /></span>
         <h1 id="scene-result-title" tabIndex={-1} ref={heading}>{detail.lessonTitle}</h1>
         <p>{detail.lesson}</p>
-        <button type="button" className="button primary" onClick={next}>{stage === "INVENTORY" ? "К результату" : "Следующая станция"} <Icon name="arrow" /></button>
+        <SceneButton type="button" className="button primary" onActivate={next}>{stage === "INVENTORY" ? "К результату" : "Следующая станция"} <Icon name="arrow" /></SceneButton>
       </section>
     </div>
   );

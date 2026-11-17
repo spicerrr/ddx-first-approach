@@ -4,6 +4,7 @@ import { barbellLayout, type BarbellDestination } from "../engine/barbell";
 import type { Action, Progress, Result } from "../engine/game";
 import { barbell, barbellSides, floorId, rackTargets, type BarbellSide, type Station } from "../engine/scenario";
 import { Icon, inventoryAsset, sceneAsset } from "./graphics";
+import { SceneButton } from "./scene-button";
 
 type Submit = (action: Action) => Result;
 type Props = { progress: Progress; submit: Submit };
@@ -76,7 +77,6 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
     };
     setKeyboard(null);
     event.currentTarget.setPointerCapture(event.pointerId);
-    event.preventDefault();
   }
 
   function pointerMove(event: PointerEvent<HTMLDivElement>) {
@@ -304,7 +304,7 @@ export function BarbellScene({ progress, submit }: Props) {
       </InteractionField>
       <div className="assembly-note"><span>Гриф {barbell.shaftKg} кг входит в общий вес</span><span>Замки {collarCount}/2</span></div>
       <SceneFeedback feedback={feedback} />
-      <button type="button" className="button primary assembly-check" onClick={verify}>Проверить <Icon name="check" size={18} /></button>
+      <SceneButton type="button" className="button primary assembly-check" onActivate={verify}>Проверить <Icon name="check" size={18} /></SceneButton>
     </div>
   );
 }

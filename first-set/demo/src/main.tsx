@@ -6,6 +6,7 @@ import { BenchChecks } from "./ui/bench";
 import { Icon } from "./ui/graphics";
 import { BarbellScene, DumbbellScene, InventoryScene } from "./ui/gym";
 import { Briefing, Finish, Home, Lesson, Route, SceneResult, Skip, TrainingInfo, type Training } from "./ui/screens";
+import { SceneButton } from "./ui/scene-button";
 import "./style.css";
 
 type EntryView = "home" | "briefing" | "route" | "play" | "skip";
@@ -66,16 +67,16 @@ function App() {
     <div className={"app" + (lesson && !sceneResult ? " app-lesson" : "") + (complete ? " app-finish" : "")} ref={screen}>
       {stageHeader ? (
         <header className="scene-header shell" inert={sceneResult}>
-          <button type="button" className="button quiet scene-route" onClick={() => setView("route")} disabled={lesson}>
+          <SceneButton type="button" className="button quiet scene-route" onActivate={() => setView("route")} disabled={lesson}>
             <Icon name="back" size={17} /> Маршрут
-          </button>
+          </SceneButton>
           <div className="scene-journey" aria-label={"Станция " + (session.stageIndex + 1) + " из " + stations.length}>
             <span>Станция {session.stageIndex + 1} из {stations.length}</span>
             <div aria-hidden="true">{stations.map((step, index) =>
               <i key={step.stage} data-step={index < session.stageIndex ? "done" : index === session.stageIndex ? "active" : undefined} />,
             )}</div>
           </div>
-          <button type="button" className="button quiet scene-close" onClick={home} aria-label="Выйти"><Icon name="close" size={22} /></button>
+          <SceneButton type="button" className="button quiet scene-close" onActivate={home} aria-label="Выйти"><Icon name="close" size={22} /></SceneButton>
         </header>
       ) : (
         <header className="site-header">
@@ -117,7 +118,7 @@ function App() {
               {station.stage === "BENCH" && <BenchChecks station={station} progress={session} submit={action} />}
               {station.stage === "INVENTORY" && <InventoryScene station={station} progress={session} submit={action} />}
               <div className="stage-footer">
-                <button type="button" className="button quiet training-link" onClick={() => openTraining("smart-start")}>Smart Start <Icon name="external" size={17} /></button>
+                <SceneButton type="button" className="button quiet training-link" onActivate={() => openTraining("smart-start")}>Smart Start <Icon name="external" size={17} /></SceneButton>
               </div>
             </div>
             {sceneResult && <SceneResult heading={heading} stage={station.stage} next={advance} />}
