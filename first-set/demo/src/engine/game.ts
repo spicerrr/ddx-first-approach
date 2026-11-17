@@ -163,7 +163,7 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
     updated = { ...progress, placements: { ...progress.placements, [action.stage]: assigned } };
   }
 
-  if (station.stage !== "BARBELL" && stationProgress(updated, station) === stationTotal(station)) {
+  if (stationProgress(updated, station) === stationTotal(station)) {
     updated = finishStation(updated, station.stage, at);
   }
   return accept(updated, message);
