@@ -18,6 +18,8 @@ function App() {
   const [view, setView] = useState<View>("home");
   const [entryTab, setEntryTab] = useState<ClubTab>("home");
   const [training, setTraining] = useState<{ target: Training; from: ClubTab | "cover" }>({ target: "smart-start", from: "home" });
+  const [touchControls, setTouchControls] = useState(() => window.matchMedia("(pointer: coarse)").matches
+    || (navigator.maxTouchPoints > 0 && !window.matchMedia("(any-pointer: fine)").matches));
   const preview = useRef<HTMLDivElement>(null);
   const screen = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -94,7 +96,12 @@ function App() {
 
   return (
     <div className="phone-preview" ref={preview}>
-      <div className={"app" + (clubTab ? " app-club" : "") + (complete ? " app-finish" : "")} data-view={view} ref={screen}>
+      <div className={"app" + (clubTab ? " app-club" : "") + (complete ? " app-finish" : "")} data-view={view} ref={screen}
+        onTouchStartCapture={() => setTouchControls(true)}
+        onPointerDownCapture={(event) => {
+          if (event.pointerType === "touch" || event.pointerType === "pen") setTouchControls(true);
+          if (event.pointerType === "mouse" && !window.matchMedia("(pointer: coarse)").matches) setTouchControls(false);
+        }}>
         {clubTab ? <ClubHeader home={home} /> : stageHeader ? (
           <header className="scene-header shell" inert={sceneResult}>
             <SceneButton type="button" className="button quiet scene-route" onActivate={() => setView("route")} disabled={lesson}>
@@ -143,7 +150,7 @@ function App() {
                 </div>
                 {station.stage === "DUMBBELLS" && <DumbbellScene station={station} progress={session} submit={action} />}
                 {station.stage === "BARBELL" && <BarbellScene progress={session} submit={action} />}
-                {station.stage === "BENCH" && <BenchStation progress={session} submit={action} />}
+                {station.stage === "BENCH" && <BenchStation progress={session} submit={action} touchControls={touchControls} />}
                 {station.stage === "INVENTORY" && <InventoryScene station={station} progress={session} submit={action} />}
                 <div className="stage-footer">
                   <SceneButton type="button" className="button quiet training-link" onActivate={() => openTraining("intro")}>Занятия с тренером <Icon name="arrow" size={17} /></SceneButton>

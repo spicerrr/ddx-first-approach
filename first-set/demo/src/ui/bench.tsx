@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import type { Action, Progress, Result } from "../engine/game";
 import { benchGoals, benchNotches, benchParts, stationDetails, type BenchNotch, type BenchPart } from "../engine/scenario";
 import type { BenchPose } from "./bench-view";
@@ -9,12 +9,6 @@ import { CoachFeedback } from "./coach-message";
 
 const BenchView = lazy(() => import("./bench-view"));
 const lastNotch = benchNotches.length - 1;
-const finePointer = "(pointer: fine) and (hover: hover)";
-
-function startsWithTouch() {
-  return window.matchMedia("(pointer: coarse)").matches
-    || (navigator.maxTouchPoints > 0 && !window.matchMedia(finePointer).matches);
-}
 
 const exercises = {
   backrest: {
@@ -35,12 +29,15 @@ const exercises = {
   },
 };
 
-export function BenchStation({ progress, submit }: { progress: Progress; submit: (action: Action) => Result }) {
+export function BenchStation({ progress, submit, touchControls }: {
+  progress: Progress;
+  submit: (action: Action) => Result;
+  touchControls: boolean;
+}) {
   const pending = benchParts.find((item) => !progress.benchAdjustments.includes(item));
   const complete = pending === undefined;
   const [part, setPart] = useState<BenchPart>(pending ?? "seat");
   const [showDemo, setShowDemo] = useState(false);
-  const [touchControls, setTouchControls] = useState(startsWithTouch);
   const [preview, setPreview] = useState<BenchNotch>();
   const [retry, setRetry] = useState(false);
   const [celebrated, setCelebrated] = useState<BenchPart>();
@@ -60,15 +57,6 @@ export function BenchStation({ progress, submit }: { progress: Progress; submit:
     ReleaseSeatLatch: 0,
   };
 
-  useEffect(() => {
-    const pointer = window.matchMedia(finePointer);
-    function update() {
-      setTouchControls(startsWithTouch());
-    }
-    pointer.addEventListener("change", update);
-    return () => pointer.removeEventListener("change", update);
-  }, []);
-
   function choose(nextPart: BenchPart) {
     setPart(nextPart);
     setPreview(undefined);
@@ -86,10 +74,7 @@ export function BenchStation({ progress, submit }: { progress: Progress; submit:
   }
 
   return (
-    <section className="bench-station" data-bench-part={part} data-sandbox={complete || undefined}
-      onPointerDownCapture={(event) => {
-        if (event.pointerType) setTouchControls(event.pointerType !== "mouse");
-      }}>
+    <section className="bench-station" data-bench-part={part} data-sandbox={complete || undefined}>
       <CoachFeedback message={complete
         ? "Скамья готова. Если хочешь, попробуй другие положения."
         : waitingForNext ? "Со спинкой получилось. Теперь попробуем сиденье." : exercise.instruction}

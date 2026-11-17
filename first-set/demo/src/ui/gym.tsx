@@ -528,11 +528,13 @@ export function InventoryScene({ station, progress, submit }: Props & { station:
     ...target, ...storage[target.id],
     items: Object.keys(assigned).filter((id) => assigned[id] === target.id),
   }));
-  const lastZone = Object.values(assigned).at(-1);
+  const stored = Object.values(assigned);
+  const lastZone = stored.at(-1);
   const message = !lastZone ? stationDetails.INVENTORY.instruction
-    : lastZone === "BANDS" ? "Резинка на крючке. Посмотри, что ещё осталось на полу."
-      : lastZone.startsWith("PLATES_") ? "Диск на своём штыре. Остальные места тоже подписаны по весу."
-        : "Предмет на месте. Что ещё осталось убрать?";
+    : stored.length === station.items.length - 1 ? "На полу остался один предмет. Ещё немного, и проход свободен."
+      : lastZone === "BANDS" ? "Резинка на крючке. Посмотри, что ещё осталось на полу."
+        : lastZone.startsWith("PLATES_") ? "Диск на своём штыре. Остальные места тоже подписаны по весу."
+          : "Предмет на месте. Что ещё осталось убрать?";
   const props = station.items.map<Prop>((item) => {
     const zone = zones.find((zone) => zone.id === assigned[item.id]);
     const position = zone ? zone.spots[zone.items.indexOf(item.id)] : looseInventory[item.id];
