@@ -34,8 +34,10 @@ for (const width of [320, 375, 402, 430, 768, 1440]) {
       await noOverflow(page);
       const coach = page.locator(".coach-message");
       await expect(coach).toHaveCSS("display", "grid");
-      await expect(coach.locator(".coach-avatar")).toHaveCSS("width", "44px");
-      await expect(coach.locator(".coach-avatar")).toHaveCSS("height", "44px");
+      expect(await coach.locator(".coach-avatar").evaluate((el) => {
+        const avatar = el as HTMLElement;
+        return [avatar.offsetWidth, avatar.offsetHeight];
+      })).toEqual([44, 44]);
       const heading = page.locator(".game-heading h1");
       const score = page.locator(".stage-score");
       if (name !== "barbell") {
