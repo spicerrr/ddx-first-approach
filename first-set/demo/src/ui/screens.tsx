@@ -1,19 +1,12 @@
-import { useState, type Ref } from "react";
+import type { Ref } from "react";
 import { stationDetails, stations, type StationId } from "../engine/scenario";
 import type { Progress } from "../engine/game";
-import { asset, Icon, type IconName } from "./graphics";
+import { asset, Icon } from "./graphics";
 import { SceneButton } from "./scene-button";
 import { CheckBurst, Confetti, ShiftMedal } from "./celebration";
 
 type Heading = Ref<HTMLHeadingElement>;
 export type Training = "smart-start" | "intro";
-
-export const stationIcons: Record<StationId, IconName> = {
-  DUMBBELLS: "gym",
-  BARBELL: "level",
-  BENCH: "bench",
-  INVENTORY: "storage",
-};
 
 const stationArt: Record<StationId, string> = {
   DUMBBELLS: "dumbbell-floor-12",
@@ -26,51 +19,16 @@ export function ShiftCover({ heading, begin, skip }: { heading: Heading; begin: 
   return (
     <section className="shift-cover">
       <div className="shift-cover-hero">
-        <img src={asset("shift-cover")} alt="" width={840} height={1050} fetchPriority="high" />
+        <img src={asset("coach-avatar")} alt="" width={640} height={800} fetchPriority="high" />
         <div className="shift-cover-copy">
           <p>Твоя первая смена</p>
           <h1 ref={heading} tabIndex={-1}>Первый<br />подход</h1>
         </div>
       </div>
-      <p className="shift-cover-intro">Побудь помощником тренера. Подготовь зал к следующей тренировке и разберись с оборудованием по ходу дела.</p>
+      <p className="shift-cover-intro">Привет! Я тренер клуба. Хочешь пройтись по залу и попробовать, как здесь всё устроено?</p>
       <div className="shift-cover-actions">
         <SceneButton type="button" className="button primary" onActivate={begin}>Начать <Icon name="arrow" /></SceneButton>
         <SceneButton type="button" className="button quiet" onActivate={skip}>Пропустить игру</SceneButton>
-      </div>
-    </section>
-  );
-}
-
-const briefing = [
-  { title: "Привет!", message: "Сегодня ты помогаешь мне в зале. Давай подготовим оборудование для тех, кто придёт тренироваться после нас." },
-  { title: "Начнём со стойки", message: "Когда гантели лежат парами на своих местах, следующий человек быстрее находит нужный вес." },
-  { title: "Я буду рядом", message: "Потом соберём штангу, поможем посетителю и освободим проход. Если что-то застопорится, дам подсказку." },
-];
-
-export function Briefing({ heading, next, back }: { heading: Heading; next: () => void; back: () => void }) {
-  const [step, setStep] = useState(0);
-  const slide = briefing[step];
-  const last = step === briefing.length - 1;
-  return (
-    <section className="coach-brief">
-      <div className="coach-brief-top">
-        <SceneButton type="button" className="button quiet" aria-label="Назад" onActivate={() => step ? setStep(step - 1) : back()}><Icon name="back" size={20} /></SceneButton>
-        <div className="coach-brief-progress" aria-label={`Реплика ${step + 1} из ${briefing.length}`}>
-          <div aria-hidden="true"><i style={{ width: (step + 1) / briefing.length * 100 + "%" }} /></div>
-          <span aria-hidden="true">{step + 1} / {briefing.length}</span>
-        </div>
-        <SceneButton type="button" className="button quiet" onActivate={next}>Пропустить</SceneButton>
-      </div>
-      <img className="coach-photo" src={asset("approach-coach")} alt="" width={370} height={562} />
-      <div className="coach-dialogue" aria-live="polite" aria-atomic="true">
-        <h1 ref={heading} tabIndex={-1}>{slide.title}</h1>
-        <p>{slide.message}</p>
-      </div>
-      <div className="coach-brief-actions">
-        <div className="coach-brief-dots" aria-hidden="true">{briefing.map((item, index) => <i data-current={index === step || undefined} key={item.title} />)}</div>
-        <SceneButton type="button" className="button secondary coach-brief-next" aria-label={last ? "К смене" : "Дальше"} onActivate={() => last ? next() : setStep(step + 1)}>
-          <Icon name="arrow" />
-        </SceneButton>
       </div>
     </section>
   );
@@ -129,22 +87,12 @@ export function Finish({ heading, training, home }: {
       <div>
         <ShiftMedal />
         <h1 ref={heading} tabIndex={-1}>Смена завершена</h1>
-        <p className="intro-text">Все четыре дела сделаны. Продолжить знакомство с залом можно на занятии с тренером.</p>
+        <p className="intro-text">Спасибо за компанию! Хочешь попробовать всё в зале? На Smart Start тренер покажет оборудование и поможет сделать первый подход.</p>
         <div className="finish-actions">
-          <SceneButton type="button" className="button primary" onActivate={() => training("smart-start")}>Smart Start <Icon name="arrow" /></SceneButton>
-          <SceneButton type="button" className="button secondary" onActivate={() => training("intro")}>Ознакомительная тренировка <Icon name="arrow" /></SceneButton>
+          <SceneButton type="button" className="button primary" onActivate={() => training("smart-start")}>Посмотреть занятие Smart Start <Icon name="arrow" /></SceneButton>
           <SceneButton type="button" className="button quiet" onActivate={home}>На главный экран</SceneButton>
         </div>
       </div>
-      <ul className="recap" aria-label="Памятка после прохождения">
-        {stations.map(({ stage }) => (
-          <li key={stage}>
-            <span className="recap-icon"><Icon name={stationIcons[stage]} size={21} /></span>
-            <div><strong>{stationDetails[stage].name}</strong><p>{stationDetails[stage].takeaway}</p></div>
-            <Icon name="check" size={18} />
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }

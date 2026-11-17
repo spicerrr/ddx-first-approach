@@ -108,18 +108,19 @@ describe("Один игровой маршрут", () => {
     expect(stationProgress(returned, stations[0])).toBe(0);
   });
 
-  it("различает недовес, перевес, разницу масс и разницу наборов", () => {
+  it("различает недовес, перевес, разницу масс и допускает разные наборы", () => {
     const initial = atStation(1);
     expect(barbellLayout(initial.barbell)).toMatchObject({ totalKg: 20, leftKg: 0, rightKg: 0 });
     const under = [...twenties, tens[0], move("DISK_5_A", "RIGHT")].reduce(accept, initial);
     expect(barbellLayout(under.barbell).totalKg).toBe(75);
     reject(under, check, "осталось 5 кг");
     const mixed = accept(under, move("DISK_5_B", "RIGHT"));
-    expect(barbellLayout(mixed.barbell)).toMatchObject({ totalKg: 80, leftKg: 30, rightKg: 30, symmetric: false });
-    reject(mixed, check, "одинаковый набор");
+    expect(barbellLayout(mixed.barbell)).toMatchObject({ totalKg: 80, leftKg: 30, rightKg: 30, symmetric: true });
+    expect(closeBarbell.reduce(accept, mixed).phase).toBe("lesson");
     const unbalanced = [move("DISK_10_A", floorId), move("DISK_5_B", floorId), move("DISK_5_A", floorId),
       move("DISK_10_A", "RIGHT"), move("DISK_10_B", "RIGHT")].reduce(accept, mixed);
-    reject(unbalanced, check, "Слева 20 кг");
+    reject(unbalanced, check, "На левой стороне 20 кг");
+    reject(unbalanced, move("LOCK_A", "LEFT"), "по 30 кг");
     const over = accept(mixed, move("DISK_5_C", "LEFT"));
     reject(over, check, "на 5 кг больше цели");
   });
@@ -128,10 +129,13 @@ describe("Один игровой маршрут", () => {
     const initial = atStation(1);
     reject(initial, move("LOCK_A", "LEFT"), "ставим в конце");
     const sameDisksUnder = twenties.reduce(accept, initial);
-    reject(sameDisksUnder, move("LOCK_A", "LEFT"), "Сначала собери 80 кг");
+    reject(sameDisksUnder, move("LOCK_A", "LEFT"), "осталось 20 кг");
     const differentDisks = [tens[0], fives[2], fives[3]].reduce(accept, sameDisksUnder);
     expect(barbellLayout(differentDisks.barbell).totalKg).toBe(80);
-    reject(differentDisks, move("LOCK_B", "RIGHT"), "одинаковыми дисками");
+    const locked = closeBarbell.slice(0, 4).reduce(accept, differentDisks);
+    const reset = accept(locked, { kind: "reset-barbell" });
+    expect(reset).toMatchObject({ stageIndex: 1, barbell: { disks: { LEFT: [], RIGHT: [] }, collars: {}, locked: {} } });
+    expect(reset.events).toBe(locked.events);
   });
 
   it("зачитывает два симметричных решения только с замком на каждой втулке", () => {
@@ -169,7 +173,7 @@ describe("Один игровой маршрут", () => {
     expect(relocated.barbell.disks.RIGHT).toEqual(["DISK_20_B", "DISK_20_A"]);
     const full = accept(relocated, move("DISK_5_A", "RIGHT"));
     reject(full, move("DISK_5_B", "RIGHT"), "уже три диска");
-    reject(full, move("LOCK_B", "RIGHT"), "ставим в конце");
+    reject(full, move("LOCK_B", "RIGHT"), "осталось");
   });
 
   it("проверяет углы посетителя до песочницы и ждёт ручного перехода", () => {

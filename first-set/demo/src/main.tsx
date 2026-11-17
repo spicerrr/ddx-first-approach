@@ -5,12 +5,12 @@ import { stations, stationTotal } from "./engine/scenario";
 import { BenchStation } from "./ui/bench";
 import { Icon } from "./ui/graphics";
 import { BarbellScene, DumbbellScene, InventoryScene } from "./ui/gym";
-import { Briefing, Finish, Route, SceneResult, ShiftCover, Skip, TrainingInfo, type Training } from "./ui/screens";
+import { Finish, Route, SceneResult, ShiftCover, Skip, TrainingInfo, type Training } from "./ui/screens";
 import { ClubAction, ClubCalendar, ClubHeader, ClubNavigation, Home, type ClubTab } from "./ui/home";
 import { SceneButton } from "./ui/scene-button";
 import "./style.css";
 
-type EntryView = ClubTab | "cover" | "briefing" | "route" | "play" | "skip";
+type EntryView = ClubTab | "cover" | "route" | "play" | "skip";
 type View = EntryView | "training";
 
 function App() {
@@ -92,7 +92,7 @@ function App() {
   return (
     <div className="phone-preview" ref={preview}>
       <div className={"app" + (clubTab ? " app-club" : "") + (complete ? " app-finish" : "")} data-view={view} ref={screen}>
-        {clubTab ? <ClubHeader home={home} /> : view === "briefing" ? null : stageHeader ? (
+        {clubTab ? <ClubHeader home={home} /> : stageHeader ? (
           <header className="scene-header shell" inert={sceneResult}>
             <SceneButton type="button" className="button quiet scene-route" onActivate={() => setView("route")} disabled={lesson}>
               <Icon name="back" size={17} /> Маршрут
@@ -123,8 +123,7 @@ function App() {
           {view === "home" && <Home heading={heading} begin={() => begin("home")} training={openTraining} calendar={() => setView("calendar")} />}
           {view === "calendar" && <ClubCalendar heading={heading} training={openTraining} approach={() => begin("calendar")} />}
           {view === "action" && <ClubAction heading={heading} begin={() => begin("action")} training={openTraining} />}
-          {view === "cover" && <ShiftCover heading={heading} begin={() => setView("briefing")} skip={() => setView("skip")} />}
-          {view === "briefing" && <Briefing heading={heading} next={() => setView("route")} back={() => setView("cover")} />}
+          {view === "cover" && <ShiftCover heading={heading} begin={() => setView("route")} skip={() => setView("skip")} />}
           {view === "route" && <Route heading={heading} progress={session} begin={enterStation} />}
           {view === "skip" && <Skip heading={heading} back={home} training={() => openTraining("smart-start")} />}
           {view === "training" && <TrainingInfo heading={heading} active={training.target} back={() => setView(training.from)} />}

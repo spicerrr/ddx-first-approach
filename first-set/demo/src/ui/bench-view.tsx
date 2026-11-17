@@ -300,6 +300,7 @@ function createViewer(
       schedule();
     },
     resetView,
+    orbit(enabled: boolean) { controls.enabled = enabled; },
     direction: (control: Control) => directions[control],
     preview(pose: Partial<BenchPose> = {}) {
       preview = pose;
@@ -384,6 +385,7 @@ export default function BenchView(props: Props) {
   useEffect(() => {
     function cancel() {
       manipulation.current = idle();
+      viewer.current?.orbit(true);
       viewer.current?.preview();
       setUnlocked(false);
       setAligned(false);
@@ -406,6 +408,7 @@ export default function BenchView(props: Props) {
   function relock(commit: boolean) {
     const active = manipulation.current;
     manipulation.current = idle();
+    viewer.current?.orbit(true);
     viewer.current?.preview();
     setUnlocked(false);
     setAligned(false);
@@ -415,10 +418,11 @@ export default function BenchView(props: Props) {
     }
   }
 
-  function startDrag(event: PointerEvent<HTMLButtonElement>, control: Control) {
+  function startDrag(event: PointerEvent<HTMLElement>, control: Control) {
     if (status === "loading" || props.paused || event.button !== 0) return;
     const active = manipulation.current;
     if (active[control] || (control === "latch" ? active.keyboard : active.pull < .78)) return;
+    viewer.current?.orbit(false);
     const button = event.currentTarget;
     button.setPointerCapture(event.pointerId);
     const scale = button.getBoundingClientRect().width / button.offsetWidth;
@@ -431,7 +435,7 @@ export default function BenchView(props: Props) {
     };
   }
 
-  function updateDrag(event: PointerEvent<HTMLButtonElement>, control: Control) {
+  function updateDrag(event: PointerEvent<HTMLElement>, control: Control) {
     const active = manipulation.current;
     const drag = active[control];
     if (!drag || drag.id !== event.pointerId) return;
@@ -447,7 +451,7 @@ export default function BenchView(props: Props) {
     updatePreview();
   }
 
-  function finishDrag(event: PointerEvent<HTMLButtonElement>, control: Control, cancelled: boolean) {
+  function finishDrag(event: PointerEvent<HTMLElement>, control: Control, cancelled: boolean) {
     const active = manipulation.current;
     const drag = active[control];
     if (!drag || drag.id !== event.pointerId) return;
@@ -466,6 +470,7 @@ export default function BenchView(props: Props) {
     if (event.code === "Space") {
       event.preventDefault();
       if (!active.latch) {
+        viewer.current?.orbit(false);
         active.keyboard = true;
         active.pull = 1;
         updatePreview();
@@ -485,6 +490,15 @@ export default function BenchView(props: Props) {
   return (
     <div className="bench-view" data-model={status} data-unlocked={unlocked || undefined} data-aligned={aligned || undefined}
       tabIndex={0} aria-label="Трёхмерная скамья" aria-describedby={props.paused ? undefined : "bench-operation"}
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) startDrag(event, "cushion");
+      }}
+      onPointerMove={(event) => {
+        if (event.target === event.currentTarget) updateDrag(event, "cushion");
+      }}
+      onPointerUp={(event) => finishDrag(event, "cushion", false)}
+      onPointerCancel={(event) => finishDrag(event, "cushion", true)}
+      onLostPointerCapture={(event) => finishDrag(event, "cushion", true)}
       onKeyDown={keyDown} onKeyUp={(event) => {
         if (event.code === "Space" && manipulation.current.keyboard) {
           event.preventDefault();

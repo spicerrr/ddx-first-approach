@@ -1,6 +1,6 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { barbellLayout, type BarbellDestination } from "../engine/barbell";
+import { barbellLayout, diskHint, type BarbellDestination } from "../engine/barbell";
 import type { Action, Progress, Result } from "../engine/game";
 import { barbell, barbellSides, floorId, rackRows, rackTargets, stationDetails, type BarbellSide, type Station } from "../engine/scenario";
 import { asset, Icon, inventoryAsset } from "./graphics";
@@ -26,6 +26,7 @@ type Prop = Point & {
   fitted?: boolean;
   mounted?: { slide: Point; clamp?: { ratio: number; height: number; closed: boolean } };
   dragSrc?: string;
+  touchPickup?: string;
 };
 type Target = Point & { id: string; label: string; width: number; height: number };
 type Held = {
@@ -77,10 +78,12 @@ function InteractionField({ name, props, targets, feedback, setFeedback, onDrop,
 
   function pointerDown(event: PointerEvent<HTMLDivElement>, prop: Prop) {
     if (!event.isPrimary || event.button !== 0) return;
+    const picked = event.pointerType === "touch" && prop.touchPickup
+      ? props.find((item) => item.id === prop.touchPickup) ?? prop : prop;
     const rect = event.currentTarget.getBoundingClientRect();
     const scale = field.current ? field.current.getBoundingClientRect().width / field.current.offsetWidth : 1;
     start.current = {
-      prop, id: event.pointerId, moved: false, width: event.currentTarget.offsetWidth * scale,
+      prop: picked, id: event.pointerId, moved: false, width: event.currentTarget.offsetWidth * scale,
       origin: { x: event.clientX, y: event.clientY },
       offset: { x: event.clientX - rect.left, y: event.clientY - rect.top },
     };
@@ -296,8 +299,10 @@ function onShaft(axial: number) {
 
 export function BarbellScene({ progress, submit }: Props) {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [resetCount, setResetCount] = useState(0);
   const assembly = progress.barbell;
-  const { totalKg, collarCount, disksReady } = barbellLayout(assembly);
+  const layout = barbellLayout(assembly);
+  const { totalKg, collarCount, disksReady } = layout;
   const mounts = new Map<string, { side: BarbellSide; axial: number; thickness: number }>();
   for (const side of barbellSides) {
     const sign = side === "LEFT" ? -1 : 1;
@@ -330,6 +335,7 @@ export function BarbellScene({ progress, submit }: Props) {
     const position = onShaft(mount.axial);
     return {
       ...position, id: prop.id, label: prop.label, src: asset(name), dragSrc, pulse, location: mount.side,
+      touchPickup: disk && !assembly.collars[mount.side] ? assembly.disks[mount.side].at(-1) : undefined,
       layer: 90 + Math.round(mount.axial * 70), size: art.width, anchor: [art.anchor[0], art.anchor[1]],
       mounted: {
         slide: { x: (end.x - position.x) / art.width * 100, y: (end.y - position.y) / art.height * 100 },
@@ -347,8 +353,8 @@ export function BarbellScene({ progress, submit }: Props) {
   return (
     <div className="barbell-board">
       <SceneFeedback feedback={feedback} greeting={disksReady
-        ? "Одинаковые диски уже на месте. Надень замки на концы грифа и закрой рычажки."
-        : stationDetails.BARBELL.instruction} />
+        ? "Вес распределён поровну. Осталось надеть замки и закрыть рычажки."
+        : (totalKg === barbell.targetKg ? diskHint(layout) : null) ?? stationDetails.BARBELL.instruction} />
       <ol className="assembly-steps" aria-label="Порядок сборки">
         <li data-state={disksReady ? "done" : "current"}><span>{disksReady ? <Icon name="check" size={16} /> : "1"}</span> Диски</li>
         <li data-state={collarCount === 2 && disksReady ? "done" : disksReady ? "current" : "waiting"}><span>{collarCount === 2 && disksReady ? <Icon name="check" size={16} /> : "2"}</span> Замки</li>
@@ -357,7 +363,7 @@ export function BarbellScene({ progress, submit }: Props) {
         <div><span>Текущий вес</span><strong key={totalKg} data-current-weight={totalKg} aria-live="polite">{totalKg} кг</strong></div>
         <p>Цель <strong>{barbell.targetKg} кг</strong></p>
       </div>
-      <InteractionField name="barbell-table" props={props} targets={barbellTargets} feedback={feedback} setFeedback={setFeedback}
+      <InteractionField key={resetCount} name="barbell-table" props={props} targets={barbellTargets} feedback={feedback} setFeedback={setFeedback}
         onDrop={(prop, destination) => submit({ kind: "move-barbell", item: prop.id, destination: destination as BarbellDestination })}>
         <span className="barbell-shadow" aria-hidden="true" />
         <img className="shaft-art" src={asset("bar-shaft")} alt="" draggable={false}
@@ -390,6 +396,12 @@ export function BarbellScene({ progress, submit }: Props) {
         <span><Icon name="lock" size={14} /> Замки {collarCount}/2</span>
       </div>
       <SceneButton type="button" className="button primary assembly-check" onActivate={verify}>Проверить <Icon name="check" size={18} /></SceneButton>
+      <SceneButton type="button" className="button quiet assembly-reset" onActivate={() => {
+        if (submit({ kind: "reset-barbell" }).accepted) {
+          setFeedback({ message: "Диски снова в лотке. Можно попробовать другую сборку." });
+          setResetCount((count) => count + 1);
+        }
+      }}><Icon name="rotate" size={17} /> Сбросить штангу</SceneButton>
     </div>
   );
 }

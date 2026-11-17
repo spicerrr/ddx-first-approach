@@ -43,15 +43,9 @@ test("четыре станции, перетаскивание снарядов
   await expect(page.getByRole("heading", { name: "Smart Start", exact: true })).toBeVisible();
   await press("Назад");
   await press("Начать знакомство");
-  await expect(page.locator(".shift-cover img")).toHaveAttribute("src", /shift-cover\.webp$/);
+  await expect(page.locator(".shift-cover img")).toHaveAttribute("src", /coach-avatar\.webp$/);
   await capture(page, info, "01a-cover");
   await press("Начать");
-  await expect(page.getByRole("heading", { name: "Привет!" })).toBeVisible();
-  await capture(page, info, "02-coach");
-  await press("Дальше");
-  await expect(page.getByRole("heading", { name: "Начнём со стойки" })).toBeVisible();
-  await press("Дальше");
-  await press("К смене");
   await expect(page.getByRole("heading", { name: "Твоя смена" })).toBeVisible();
   await expect(page.locator('.route-stations [data-progress="locked"]')).toHaveCount(3);
   await capture(page, info, "02a-route");
@@ -93,6 +87,10 @@ test("четыре станции, перетаскивание снарядов
   await expect(prop(page, "LOCK_A")).toHaveAttribute("data-location", "FLOOR");
   await expect(status).toContainText("Замки ставим в конце");
   await expect(button(page, "Защёлкнуть левый замок")).toHaveCount(0);
+  await move(["DISK_20_A", "LEFT"]);
+  await press("Сбросить штангу");
+  await expect(weight(page)).toHaveText("20 кг");
+  await expect(prop(page, "DISK_20_A")).toHaveAttribute("data-location", "FLOOR");
   await capture(page, info, "05a-coach-hint");
   await move(["DISK_20_B", "RIGHT"]);
   await expect(weight(page)).toHaveText("40 кг");
@@ -197,8 +195,8 @@ test("четыре станции, перетаскивание снарядов
     pieces.filter((piece) => Number(getComputedStyle(piece).opacity) > .5).length,
   )).toBeGreaterThan(12);
   await page.screenshot({ path: info.outputPath("09-finish.png"), animations: "allow" });
-  await press("Ознакомительная тренировка");
-  await expect(page.getByRole("link").first()).toHaveAttribute("href", "https://www.ddxfitness.ru/group-training/3076/");
+  await press("Посмотреть занятие Smart Start");
+  await expect(page.getByRole("link").first()).toHaveAttribute("href", "https://www.ddxfitness.ru/smart-start/");
   await press("Назад");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Смена завершена");
   await expect(button(page, "Пройти ещё раз")).toHaveCount(0);

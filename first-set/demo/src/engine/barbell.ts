@@ -28,8 +28,9 @@ export function moveBarbell(assembly: BarbellAssembly, id: string, destination: 
   if (prop.kind === "collar") {
     if (source && assembly.locked[source]) return reject("Замок держит диски. Открой рычажок, тогда замок можно будет снять.");
     if (target && assembly.collars[target]) return reject("По одному замку на втулку. Попробуй с другой стороны.");
-    if (target && !barbellLayout(assembly).disksReady) {
-      return reject(`Замки ставим в конце, чтобы удержать диски. Сначала собери ${barbell.targetKg} кг с одинаковыми дисками с обеих сторон.`);
+    if (target) {
+      const hint = diskHint(barbellLayout(assembly));
+      if (hint) return reject(hint);
     }
     const collars = { ...assembly.collars };
     if (source) delete collars[source];
@@ -68,35 +69,34 @@ export function toggleCollar(assembly: BarbellAssembly, side: BarbellSide): Barb
 }
 
 export function barbellLayout(assembly: BarbellAssembly) {
-  const weights = (side: BarbellSide) => barbell.props.flatMap((item) =>
-    item.kind === "disk" && assembly.disks[side].includes(item.id) ? [item.weightKg] : [],
-  ).sort((a, b) => a - b);
-  const left = weights("LEFT");
-  const right = weights("RIGHT");
-  const leftKg = left.reduce<number>((sum, kg) => sum + kg, 0);
-  const rightKg = right.reduce<number>((sum, kg) => sum + kg, 0);
+  const mass = (side: BarbellSide) => barbell.props.reduce<number>((sum, item) =>
+    sum + (item.kind === "disk" && assembly.disks[side].includes(item.id) ? item.weightKg : 0), 0);
+  const leftKg = mass("LEFT");
+  const rightKg = mass("RIGHT");
   const totalKg = barbell.shaftKg + leftKg + rightKg;
-  const symmetric = left.length === right.length && left.every((kg, index) => kg === right[index]);
+  const symmetric = leftKg === rightKg;
   return {
-    leftKg, rightKg,
-    totalKg,
-    symmetric,
+    leftKg, rightKg, totalKg, symmetric,
     disksReady: totalKg === barbell.targetKg && symmetric,
     collarCount: barbellSides.filter((side) => assembly.locked[side]).length,
   };
 }
 
-export function checkBarbell(assembly: BarbellAssembly) {
-  const { leftKg, rightKg, totalKg, symmetric, collarCount } = barbellLayout(assembly);
+export function diskHint({ leftKg, rightKg, totalKg }: ReturnType<typeof barbellLayout>) {
   const missing = barbell.targetKg - totalKg;
-  if (missing > 0) return { accepted: false, message: `До ${barbell.targetKg} кг осталось ${missing} кг. Посмотри, как добрать вес одинаковыми дисками с обеих сторон.` };
-  if (missing < 0) return { accepted: false, message: `На грифе на ${-missing} кг больше цели. Давай подберём диски полегче.` };
-  if (leftKg !== rightKg) {
-    return { accepted: false, message: `Общий вес уже подходит. Слева ${leftKg} кг дисков, справа ${rightKg} кг. Давай уравняем стороны.` };
+  if (totalKg === barbell.targetKg && leftKg !== rightKg) {
+    return `${barbell.targetKg} кг уже набрано. На левой стороне ${leftKg} кг дисков, на правой — ${rightKg} кг. Для равновесия нужно по ${(barbell.targetKg - barbell.shaftKg) / 2} кг с каждой стороны.`;
   }
-  if (!symmetric) {
-    return { accepted: false, message: "Вес с обеих сторон совпал. Давай ещё сверим сами диски. На каждой стороне нужен одинаковый набор." };
-  }
+  if (missing > 0) return `До ${barbell.targetKg} кг осталось ${missing} кг. Замки ставим в конце, когда вес набран поровну.`;
+  if (missing < 0) return `На грифе на ${-missing} кг больше цели. Если взять диски полегче, получится ближе к нужному весу.`;
+  return null;
+}
+
+export function checkBarbell(assembly: BarbellAssembly) {
+  const layout = barbellLayout(assembly);
+  const hint = diskHint(layout);
+  if (hint) return { accepted: false, message: hint };
+  const { collarCount } = layout;
   if (collarCount !== 2) {
     const mounted = barbellSides.filter((side) => assembly.collars[side]).length;
     return { accepted: false, message: mounted === 2 ? "Диски на месте. Закрой рычажки замков, чтобы их удержать." : "Диски на месте. Надень по замку на каждую сторону и закрой рычажки." };

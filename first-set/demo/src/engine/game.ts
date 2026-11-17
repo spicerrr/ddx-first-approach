@@ -19,6 +19,7 @@ export type Progress = {
 
 export type Action =
   | { kind: "place"; stage: "DUMBBELLS" | "INVENTORY"; item: string; destination: string }
+  | { kind: "reset-barbell" }
   | { kind: "move-barbell"; item: string; destination: BarbellDestination }
   | { kind: "check-barbell" }
   | { kind: "toggle-collar"; side: BarbellSide }
@@ -83,6 +84,11 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
     if (station.stage !== "BARBELL") return reject("Выбери действие текущей станции.");
     const result = checkBarbell(progress.barbell);
     return result.accepted ? accept(finishStation(progress, "BARBELL", at), result.message) : reject(result.message);
+  }
+
+  if (action.kind === "reset-barbell") {
+    if (station.stage !== "BARBELL") return reject("Сброс доступен на станции со штангой.");
+    return accept({ ...progress, barbell: newAssembly() }, "");
   }
 
   if (action.kind === "move-barbell") {
