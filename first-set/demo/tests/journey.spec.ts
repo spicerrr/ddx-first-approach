@@ -1,5 +1,5 @@
 import { test, expect, type Page, type TestInfo } from "@playwright/test";
-import { activate, adjustBench, begin, button, dragProp, dropTarget, keyboardBench, noOverflow, openBench, placements, prop } from "./controls";
+import { activate, adjustBench, begin, button, dragProp, dropTarget, keyboardBench, noOverflow, openBench, placements, prop, solveChallenge } from "./controls";
 
 const oldStorageKey = "first-approach-interactive-v3";
 const score = (page: Page, done: number, all: number) => page.getByLabel("Выполнено " + done + " из " + all, { exact: true });
@@ -17,7 +17,6 @@ test("четыре станции, перетаскивание снарядов
   page.on("response", (response) => { if (response.status() >= 400) problems.push(response.status() + " " + response.url()); });
   page.on("requestfailed", (request) => problems.push(request.failure()?.errorText + " " + request.url()));
   await page.addInitScript(() => {
-    Math.random = () => .01;
     const pulses: (number | number[])[] = [];
     Object.defineProperty(window, "__scenePulses", { value: pulses });
     Object.defineProperty(navigator, "vibrate", { value: (pattern: number | number[]) => { pulses.push(pattern); return true; } });
@@ -259,9 +258,7 @@ test("четыре станции, перетаскивание снарядов
   await press("К проверке");
   await expect(page.getByRole("heading", { name: "Теперь без подсказок" })).toBeVisible();
   await expect(page.locator(".coach-message, [data-tip-target]")).toHaveCount(0);
-  await move(placements.dumbbells[2]);
-  await move(placements.dumbbells[3]);
-  await expect(page.getByRole("status")).toHaveText("Контрольная ситуация пройдена.");
+  await solveChallenge(page, isMobile);
   await press("К итогам");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Первый подход пройден");
   await expect(page.getByRole("list", { name: "Пройденные станции" }).getByRole("listitem")).toHaveCount(4);

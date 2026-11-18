@@ -38,6 +38,29 @@ export async function keyboardPlace(page: Page, [item, target]: readonly [string
   await dropTarget(page, target).press("Space");
 }
 
+export async function solveChallenge(page: Page, touch = false) {
+  const challenge = page.locator("[data-challenge]");
+  await expect(challenge).toBeVisible();
+  const stage = await challenge.getAttribute("data-challenge");
+  const move = (pair: readonly [string, string]) => touch ? dragProp(page, pair, true) : keyboardPlace(page, pair);
+  if (stage === "BENCH") {
+    await openBench(page);
+    if (touch) await adjustBench(page, true, true, 29);
+    else await keyboardBench(page);
+  } else if (stage === "BARBELL") {
+    for (const pair of [
+      ["DISK_20_A", "LEFT"], ["DISK_20_B", "RIGHT"], ["DISK_5_A", "LEFT"],
+      ["DISK_5_B", "RIGHT"], ["LOCK_A", "LEFT"], ["LOCK_B", "RIGHT"],
+    ] as const) await move(pair);
+    for (const name of ["Защёлкнуть левый замок", "Защёлкнуть правый замок", "Проверить"]) await activate(page, name, touch);
+  } else {
+    const pending = stage === "DUMBBELLS" ? placements.dumbbells.slice(2, 4)
+      : placements.inventory.filter(([item]) => ["PLATE_15", "BAND_1", "ROLLER_2"].includes(item));
+    for (const pair of pending) await move(pair);
+  }
+  await expect(challenge.getByRole("status")).toHaveText("Контрольная ситуация пройдена.");
+}
+
 export async function dragProp(page: Page, [item, target]: readonly [string, string], touch = false) {
   const source = prop(page, item);
   const receiver = dropTarget(page, target);
