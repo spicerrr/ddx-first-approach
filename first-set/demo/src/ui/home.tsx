@@ -127,7 +127,7 @@ export function Home({ heading, training, calendar, startPoint, action }: {
           <img src={asset("nav-dumbbell-12")} alt="" /><span>Точка старта</span>
         </SceneButton>
         <SceneButton type="button" className="club-story story-coach" onActivate={() => training("intro")}>
-          <img src={asset("coach-neutral")} alt="" /><span>Тренировка<br />с тренером</span>
+          <img src={asset("coach-neutral")} alt="" /><span>С тренером</span>
         </SceneButton>
         <SceneButton type="button" className="club-story story-action" onActivate={action} aria-label="Видеотренировки DDX Action">
           <img src={asset("nav-bench")} alt="" /><span>DDX Action</span>
