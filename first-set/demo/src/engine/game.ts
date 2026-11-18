@@ -1,4 +1,4 @@
-import { checkBarbell, moveBarbell, newAssembly, toggleCollar, type BarbellAssembly, type BarbellDestination } from "./barbell";
+import { checkBarbell, moveBarbell, newAssembly, toggleCollar, type BarbellAssembly, type BarbellDestination, type BarbellIssue } from "./barbell";
 import { benchGoals, benchNotches, benchParts, floorId, inventoryDestination, lastStation, rackTargets, stations, stationTotal,
   type BarbellSide, type BenchNotch, type BenchPart, type Station, type StationId } from "./scenario";
 
@@ -30,6 +30,7 @@ export type Result = {
   progress: Progress;
   accepted: boolean;
   message: string;
+  issue?: BarbellIssue;
 };
 
 export function newProgress(): Progress {
@@ -47,6 +48,16 @@ export function newProgress(): Progress {
 export function start(progress: Progress, at = new Date().toISOString()): Progress {
   if (progress.phase !== "ready") return progress;
   return { ...progress, phase: "playing", events: [{ type: "game_session_started", at }] };
+}
+
+export function completedStationCount(progress: Progress) {
+  return progress.stageIndex + Number(progress.phase === "lesson" || progress.phase === "complete");
+}
+
+export function restoreProgress(completed: number): Progress {
+  const progress = newProgress();
+  if (completed >= stations.length) return { ...progress, stageIndex: lastStation, phase: "complete" };
+  return { ...progress, stageIndex: completed };
 }
 
 export function stationProgress(progress: Progress, station: Station) {
@@ -74,16 +85,19 @@ function finishStation(progress: Progress, stage: StationId, at: string): Progre
   return { ...progress, phase: "lesson", events };
 }
 
-export function submit(progress: Progress, action: Action, at = new Date().toISOString()): Result {
-  const reject = (message: string): Result => ({ progress, accepted: false, message });
-  const accept = (next: Progress, message: string): Result => ({ progress: next, accepted: true, message });
-  if (progress.phase !== "playing") return reject("Продолжи прохождение со своего экрана.");
+type ExerciseGoals = { barbellKg?: number; bench?: Partial<Record<BenchPart, BenchNotch>> };
 
+export function submit(progress: Progress, action: Action, at = new Date().toISOString(), goals: ExerciseGoals = {}): Result {
+  const reject = (message: string, issue?: BarbellIssue): Result => ({ progress, accepted: false, message, issue });
+  const accept = (next: Progress, message: string): Result => ({ progress: next, accepted: true, message });
   const station = stations[progress.stageIndex];
+  const benchPractice = progress.phase === "lesson" && station.stage === "BENCH"
+    && (action.kind === "bench-adjustment" || action.kind === "finish-bench");
+  if (progress.phase !== "playing" && !benchPractice) return reject("Продолжи прохождение со своего экрана.");
   if (action.kind === "check-barbell") {
     if (station.stage !== "BARBELL") return reject("Выбери действие текущей станции.");
-    const result = checkBarbell(progress.barbell);
-    return result.accepted ? accept(finishStation(progress, "BARBELL", at), result.message) : reject(result.message);
+    const result = checkBarbell(progress.barbell, goals.barbellKg);
+    return result.accepted ? accept(finishStation(progress, "BARBELL", at), result.message) : reject(result.message, result.issue);
   }
 
   if (action.kind === "reset-barbell") {
@@ -93,8 +107,8 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
 
   if (action.kind === "move-barbell") {
     if (station.stage !== "BARBELL") return reject("Выбери действие текущей станции.");
-    const result = moveBarbell(progress.barbell, action.item, action.destination);
-    return result.accepted ? accept({ ...progress, barbell: result.assembly }, result.message) : reject(result.message);
+    const result = moveBarbell(progress.barbell, action.item, action.destination, goals.barbellKg);
+    return result.accepted ? accept({ ...progress, barbell: result.assembly }, result.message) : reject(result.message, result.issue);
   }
 
   if (action.kind === "toggle-collar") {
@@ -110,20 +124,22 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
     const pending = benchParts.find((part) => !progress.benchAdjustments.includes(part));
     if (pending && action.part !== pending) return reject("Выполни текущую настройку.");
     if (progress.benchPositions[action.part] === action.notch) return reject("");
-    return accept({
+    const next = {
       ...progress,
       benchPositions: { ...progress.benchPositions, [action.part]: action.notch },
-      benchAdjustments: pending && action.notch === benchGoals[pending]
+      benchAdjustments: pending && action.notch === (goals.bench?.[pending] ?? benchGoals[pending])
         ? [...progress.benchAdjustments, pending]
         : progress.benchAdjustments,
-    }, "");
+    };
+    const finished = pending && next.benchAdjustments.length === benchParts.length;
+    return accept(finished ? finishStation(next, "BENCH", at) : next, "");
   }
 
   if (action.kind === "finish-bench") {
     if (station.stage !== "BENCH" || !benchParts.every((part) => progress.benchAdjustments.includes(part))) {
       return reject("Отрегулируй спинку и сиденье.");
     }
-    return accept(nextStation(finishStation(progress, "BENCH", at)), "");
+    return accept(nextStation(progress), "");
   }
 
   if (station.stage !== action.stage) return reject("Выбери предмет текущей станции.");

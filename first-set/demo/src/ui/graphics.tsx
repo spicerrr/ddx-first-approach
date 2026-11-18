@@ -4,10 +4,6 @@ export function asset(file: string) {
   return `${import.meta.env.BASE_URL}art/${file}.webp`;
 }
 
-export function sceneAsset(file: string) {
-  return `${import.meta.env.BASE_URL}art/${file}.png`;
-}
-
 const iconPaths = {
   arrow: <><path d="M4 12h15"/><path d="m13 6 6 6-6 6"/></>,
   back: <><path d="M20 12H5"/><path d="m11 6-6 6 6 6"/></>,
@@ -17,6 +13,7 @@ const iconPaths = {
   close: <><path d="m6 6 12 12"/><path d="M18 6 6 18"/></>,
   alert: <><path d="M12 6v7"/><path d="M12 17h.01"/></>,
   info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></>,
+  help: <><circle cx="12" cy="12" r="9"/><path d="M9.1 9.2c.2-1.6 1.7-2.3 2.9-2.3 1.5 0 2.9 1 2.9 2.5 0 1.9-2.9 2.1-2.9 4m0 2.8h.01"/></>,
   home: <><path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9Z"/><path d="M9 16h6"/></>,
   calendar: <><rect x="4" y="6" width="16" height="15" rx="2"/><path d="M8 3v5m8-5v5M4 11h16M8 15h.01m4 0h.01m4 0h.01M8 18h.01m4 0h.01"/></>,
   play: <><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4Z"/></>,
@@ -30,6 +27,9 @@ const iconPaths = {
   book: <><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6m-6 4h6"/></>,
   person: <><circle cx="12" cy="8" r="3"/><path d="M6 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></>,
   rotate: <><path d="M4 11a8 8 0 1 1 2 6M4 5v6h6"/></>,
+  touch: <><path d="M9 15V6a2 2 0 0 1 4 0v6l4 1a3 3 0 0 1 2 3v2a3 3 0 0 1-3 3h-3a4 4 0 0 1-3-1l-4-4a1.7 1.7 0 0 1 2-2Z"/><path d="M5 7V5m12 2V5"/></>,
+  mouse: <><rect x="7" y="3" width="10" height="18" rx="5"/><path d="M12 7v3"/></>,
+  keyboard: <><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h1m3 0h1m3 0h1m-8 4h8"/></>,
   level: <><path d="M4 17h16M7 13V7m5 6V5m5 8V9"/><path d="M4 20h16"/></>,
 } as const;
 
@@ -40,12 +40,11 @@ export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
 
 export type ArtName = "dumbbells" | "plate" | "mat" | "band" | "block" | "roller";
 const inventoryArt: Record<string, ArtName> = { MAT: "mat", BAND: "band", BLOCK: "block", ROLLER: "roller" };
-
-export function Equipment({ name, className = "", alt = "" }: { name: ArtName; className?: string; alt?: string }) {
-  return <img className={`equipment ${className}`} src={asset(name)} alt={alt} decoding="async" draggable={false} />;
-}
+const inventoryVariants: Record<string, string> = {
+  MAT_2: "mat-teal", BAND_2: "band-coral", BLOCK_2: "block-light", ROLLER_2: "roller-teal",
+};
 
 export function inventoryAsset(item: Item) {
   if (item.id.startsWith("PLATE_")) return asset("inventory-plate-" + item.weightKg);
-  return asset(inventoryArt[item.id.split("_")[0]]);
+  return asset(inventoryVariants[item.id] ?? inventoryArt[item.id.split("_")[0]]);
 }

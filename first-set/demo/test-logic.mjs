@@ -197,7 +197,7 @@ describe("Один игровой маршрут", () => {
     reject(raised, finishBench);
     const practiced = accept(raised, adjust("seat", 1));
     expect(practiced.stageIndex).toBe(2);
-    expect(practiced.phase).toBe("playing");
+    expect(practiced.phase).toBe("lesson");
     const lowered = accept(practiced, adjust("backrest", 0));
     expect(lowered.benchPositions).toEqual({ backrest: 0, seat: 1 });
     expect(stationProgress(lowered, stations[2])).toBe(2);

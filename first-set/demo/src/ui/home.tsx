@@ -1,12 +1,12 @@
 import { useRef, useState, type Ref } from "react";
-import { asset, Icon, sceneAsset } from "./graphics";
+import { asset, Icon } from "./graphics";
 import { SceneButton } from "./scene-button";
 import type { Training } from "./screens";
 import "./home.css";
 
 type Heading = Ref<HTMLHeadingElement>;
 type TrainingLink = (target: Training) => void;
-export type ClubTab = "home" | "calendar" | "action";
+export type ClubTab = "home" | "calendar" | "action" | "start-point";
 
 export function ClubHeader({ home }: { home: () => void }) {
   const [showNotifications, setShowNotifications] = useState(false);
@@ -32,7 +32,7 @@ export function ClubHeader({ home }: { home: () => void }) {
 export function ClubNavigation({ tab, go, training }: { tab: ClubTab; go: (tab: ClubTab) => void; training: TrainingLink }) {
   return (
     <nav className="club-navigation" aria-label="Разделы DDX Fitness">
-      <SceneButton type="button" aria-current={tab === "home" ? "page" : undefined} onActivate={() => go("home")}>
+      <SceneButton type="button" aria-current={tab === "home" || tab === "start-point" ? "page" : undefined} onActivate={() => go("home")}>
         <Icon name="home" size={21} /><span>Главная</span>
       </SceneButton>
       <SceneButton type="button" aria-current={tab === "calendar" ? "page" : undefined} onActivate={() => go("calendar")}>
@@ -102,23 +102,24 @@ function TrainingShortcuts({ training, approach }: { training: TrainingLink; app
     <div className="club-training-cards">
       <SceneButton type="button" className="club-training-card" onActivate={() => training("smart-start")}>
         <strong>Групповые<br />тренировки</strong>
-        <img src={asset("mat")} alt="" />
+        <img src={asset("nav-mat")} alt="" />
         <Icon name="chevron" size={15} />
       </SceneButton>
       <SceneButton type="button" className="club-training-card" onActivate={approach}>
         <strong>Самостоятельные<br />тренировки</strong>
-        <img src={sceneAsset("dumbbell-8")} alt="" />
+        <img src={asset("nav-dumbbell-8")} alt="" />
         <Icon name="chevron" size={15} />
       </SceneButton>
     </div>
   );
 }
 
-export function Home({ heading, begin, training, calendar }: {
+export function Home({ heading, begin, training, calendar, startPoint }: {
   heading: Heading;
   begin: () => void;
   training: TrainingLink;
   calendar: () => void;
+  startPoint: () => void;
 }) {
   const offer = useRef<HTMLDivElement>(null);
 
@@ -133,10 +134,10 @@ export function Home({ heading, begin, training, calendar }: {
       <h1 className="sr-only" ref={heading} tabIndex={-1}>Главная DDX Fitness</h1>
       <section className="club-stories" aria-label="Знакомство с клубом">
         <SceneButton type="button" className="club-story story-smart" onActivate={() => training("smart-start")}>
-          <img src={asset("mat")} alt="" /><span>Smart Start</span>
+          <img src={asset("nav-mat")} alt="" /><span>Smart Start</span>
         </SceneButton>
-        <SceneButton type="button" className="club-story story-gym" onActivate={focusOffer}>
-          <img src={sceneAsset("dumbbell-12")} alt="" /><span>Первый визит<br />в зал</span>
+        <SceneButton type="button" className="club-story story-gym" onActivate={startPoint}>
+          <img src={asset("nav-dumbbell-12")} alt="" /><span>Первый визит<br />в зал</span>
         </SceneButton>
         <SceneButton type="button" className="club-story story-coach" onActivate={() => training("intro")}>
           <img src={asset("coach-neutral")} alt="" /><span>Тренировка<br />с тренером</span>
@@ -174,6 +175,18 @@ export function ClubAction({ heading, begin, training }: { heading: Heading; beg
       <ApproachCard begin={begin} />
       <SceneButton type="button" className="button secondary" onActivate={() => training("smart-start")}>
         Smart Start <Icon name="arrow" />
+      </SceneButton>
+    </section>
+  );
+}
+
+export function ClubStartPoint({ heading, begin, training }: { heading: Heading; begin: () => void; training: TrainingLink }) {
+  return (
+    <section className="club-subpage club-start-point">
+      <h1 ref={heading} tabIndex={-1}>Точка старта</h1>
+      <ApproachCard begin={begin} />
+      <SceneButton type="button" className="button ghost" onActivate={() => training("intro")}>
+        Занятия с тренером <Icon name="arrow" size={17} />
       </SceneButton>
     </section>
   );

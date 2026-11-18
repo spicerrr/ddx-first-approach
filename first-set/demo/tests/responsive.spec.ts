@@ -1,11 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { button, keyboardBench, keyboardPlace, noOverflow, openBench, placements } from "./controls";
 
-const nextButtons = ["К штанге", "К скамье", "К инвентарю", "Завершить игру"];
+const nextButtons = ["К штанге", "К скамье", "К инвентарю", "К контрольной ситуации"];
 
 for (const width of [320, 375, 402, 430, 768, 1440]) {
   test(`экраны и доступность кнопок при ширине ${width} px`, async ({ page }) => {
     await page.setViewportSize({ width, height: width < 700 ? 874 : 900 });
+    await page.addInitScript(() => { Math.random = () => .01; });
     await page.goto("");
     await expect(button(page, "Открыть игру")).toBeVisible();
     await noOverflow(page);
@@ -28,8 +29,8 @@ for (const width of [320, 375, 402, 430, 768, 1440]) {
     expect(await route.locator("img").evaluateAll((images) =>
       images.every((img) => img.clientWidth <= 70 && img.clientHeight === 46),
     )).toBe(true);
-    await expect(button(page, "К гантелям")).toBeInViewport();
-    await button(page, "К гантелям").click();
+    await expect(button(page, "Начать")).toBeInViewport();
+    await button(page, "Начать").click();
     for (const [index, name] of ["dumbbells", "barbell", "bench", "inventory"].entries()) {
       await noOverflow(page);
       const coach = page.locator(".coach-message");
@@ -67,8 +68,12 @@ for (const width of [320, 375, 402, 430, 768, 1440]) {
       }
       await noOverflow(page);
       await button(page, nextButtons[index]).click();
+      await button(page, index === 3 ? "К проверке" : "К станции").click();
     }
-    await expect(button(page, "На главный экран")).toBeVisible();
+    await keyboardPlace(page, placements.dumbbells[2]);
+    await keyboardPlace(page, placements.dumbbells[3]);
+    await button(page, "К итогам").click();
+    await expect(button(page, "Вернуться в Точку старта")).toBeVisible();
     await noOverflow(page);
   });
 }

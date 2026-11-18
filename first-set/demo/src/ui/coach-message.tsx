@@ -1,24 +1,32 @@
 import type { ReactNode } from "react";
+import type { CoachLine } from "../engine/hints";
 import { asset } from "./graphics";
 
-export function CoachMessage({ children, warning = false }: { children: ReactNode; warning?: boolean }) {
+export function CoachMessage({ children, tone = "task", level, controls }: {
+  children: ReactNode; tone?: CoachLine["tone"]; level?: number; controls?: ReactNode;
+}) {
   return (
-    <div className="coach-message" data-warning={warning || undefined}>
+    <div className="coach-message" data-tone={tone} data-hint-level={level}>
       <span className="coach-avatar" aria-hidden="true">
-        <img src={asset(warning ? "coach-explaining" : "coach-neutral")} alt="" />
+        <img src={asset("coach-neutral")} alt="" />
       </span>
-      <div>
+      <div className="coach-copy">
         <strong>Тренер</strong>
-        <p>{children}</p>
+        <p aria-live="polite" aria-atomic="true">{children}</p>
       </div>
+      {controls}
     </div>
   );
 }
 
-export function CoachFeedback({ message, hint }: { message: string; hint?: string | null }) {
+export function CoachFeedback({ message, line, controls }: {
+  message: string; line?: CoachLine; controls?: ReactNode;
+}) {
   return (
-    <div className="scene-response" aria-live="polite" aria-atomic="true">
-      <CoachMessage warning={Boolean(hint)}>{hint ?? message}</CoachMessage>
+    <div className="scene-response">
+      <CoachMessage tone={line?.tone} level={line?.level} controls={controls}>
+        {line?.text ?? message}
+      </CoachMessage>
     </div>
   );
 }

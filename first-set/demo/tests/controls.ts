@@ -30,7 +30,7 @@ export async function activate(page: Page, name: string, touch = false) {
 }
 
 export async function begin(page: Page, touch = false) {
-  for (const name of ["Открыть игру", "Начать игру", "К гантелям"]) await activate(page, name, touch);
+  for (const name of ["Открыть игру", "Начать игру", "Начать"]) await activate(page, name, touch);
 }
 
 export async function keyboardPlace(page: Page, [item, target]: readonly [string, string]) {
@@ -89,6 +89,27 @@ export async function keyboardBench(page: Page, notches = 1) {
   await expect(view).toHaveAttribute("data-unlocked", "true");
   for (let index = 0; index < notches; index++) await page.keyboard.press("ArrowUp");
   await page.keyboard.up("Space");
+  await expect(view).not.toHaveAttribute("data-unlocked", "true");
+}
+
+export async function adjustBenchWithMouse(page: Page, notches: number) {
+  const view = page.locator(".bench-view");
+  const latch = view.locator('[data-bench-control="latch"]');
+  const cushion = view.locator('[data-bench-control="cushion"]');
+  await latch.scrollIntoViewIfNeeded();
+  const box = (await latch.boundingBox())!;
+  const angle = (control: typeof latch) => control.evaluate((element) => parseFloat(element.style.getPropertyValue("--gesture-angle")));
+  const direction = await angle(latch);
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  const held = { x: x + Math.cos(direction) * 24, y: y + Math.sin(direction) * 24 };
+  await page.mouse.move(held.x, held.y, { steps: 8 });
+  await expect(view).toHaveAttribute("data-unlocked", "true");
+  const travel = notches * 29;
+  const tilt = await angle(cushion);
+  await page.mouse.move(held.x + Math.cos(tilt) * travel, held.y + Math.sin(tilt) * travel, { steps: 8 });
+  await page.mouse.up();
   await expect(view).not.toHaveAttribute("data-unlocked", "true");
 }
 

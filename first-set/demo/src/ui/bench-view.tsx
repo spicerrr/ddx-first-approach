@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { benchNotches, benchParts, type BenchNotch, type BenchPart } from "../engine/scenario";
 import { Icon } from "./graphics";
+import type { InputMode } from "./input-mode";
+import { benchModel } from "./bench-resource";
 
 const clips = ["RaiseBackrest", "RaiseSeat", "PullBackrestPin", "ReleaseSeatLatch"] as const;
 export type BenchClip = typeof clips[number];
@@ -15,8 +17,10 @@ type Props = {
   notch: BenchNotch;
   target?: BenchNotch;
   paused: boolean;
-  keyboardControls: boolean;
-  onPreview: (notch?: BenchNotch) => void;
+  inputMode: InputMode;
+  highlightLatch?: boolean;
+  onLockedAttempt: () => void;
+  onManipulate?: () => void;
   onAdjust: (notch: BenchNotch) => void;
 };
 type Point = { x: number; y: number };
@@ -59,7 +63,6 @@ function disposeModel(model: THREE.Object3D) {
 function createViewer(
   host: HTMLDivElement,
   marker: (control: Control) => HTMLButtonElement | null,
-  guide: () => HTMLSpanElement | null,
   props: () => Props,
   setStatus: (status: "ready" | "failed") => void,
 ) {
@@ -110,9 +113,8 @@ function createViewer(
 
   let model: THREE.Object3D | null = null;
   let mixer: THREE.AnimationMixer | null = null;
-  const ghostFill = new THREE.MeshBasicMaterial({ color: 0x00cec9, transparent: true, opacity: .24, depthWrite: false });
-  const ghostEdge = new THREE.LineBasicMaterial({ color: 0x078687, transparent: true, opacity: .85, depthWrite: false });
-  const ghosts = new Map<BenchPart, { cushion: THREE.Mesh; shape: THREE.Mesh; edge: THREE.EdgesGeometry }>();
+  const ghostFill = new THREE.MeshBasicMaterial({ color: 0x00bcb9, transparent: true, opacity: .35, depthWrite: false });
+  const ghosts = new Map<BenchPart, { cushion: THREE.Mesh; shape: THREE.Mesh }>();
   let closed = false;
   let frame = 0;
   let width = 1;
@@ -169,7 +171,7 @@ function createViewer(
 
   function updateMarkers() {
     if (!model || !mixer) return;
-    const { part, target: goal } = props();
+    const { part, target: goal, paused } = props();
     const controls = controlsByPart[part];
     for (const { shape } of ghosts.values()) shape.visible = false;
     let latchPoint: Point | undefined;
@@ -195,15 +197,11 @@ function createViewer(
       applyClip(clip, 1);
       mixer.update(0);
       const end = screenPoint(target);
-      const halo = kind === "cushion" ? guide() : null;
-      if (halo && goal !== undefined) {
+      if (kind === "cushion" && goal !== undefined && !paused) {
         applyClip(clip, goal / lastNotch);
         mixer.update(0);
-        const aim = screenPoint(target);
-        halo.style.left = THREE.MathUtils.clamp((aim.x + 1) * width / 2, 25, width - 25) + "px";
-        halo.style.top = THREE.MathUtils.clamp((1 - aim.y) * height / 2, 25, height - 25) + "px";
         const ghost = ghosts.get(part);
-        if (ghost && (preview[controls.latch.clip] ?? 0) >= .78) {
+        if (ghost) {
           ghost.cushion.updateWorldMatrix(true, false);
           ghost.shape.matrix.copy(ghost.cushion.matrixWorld);
           ghost.shape.matrixWorldNeedsUpdate = true;
@@ -253,7 +251,12 @@ function createViewer(
   resetView();
   resize();
 
-  new GLTFLoader().load(`${import.meta.env.BASE_URL}art/bench.glb`, (gltf) => {
+  const loader = new GLTFLoader();
+  void benchModel().then((bytes) => {
+    if (closed) return;
+    return loader.parseAsync(bytes, import.meta.env.BASE_URL + "art/");
+  }).then((gltf) => {
+    if (!gltf) return;
     if (closed) {
       disposeModel(gltf.scene);
       return;
@@ -281,16 +284,14 @@ function createViewer(
       const cushion = model.getObjectByName(cushionNames[part])?.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
       if (!cushion) continue;
       const shape = new THREE.Mesh(cushion.geometry, ghostFill);
-      const edge = new THREE.EdgesGeometry(cushion.geometry, 16);
-      shape.add(new THREE.LineSegments(edge, ghostEdge));
       shape.matrixAutoUpdate = false;
       shape.visible = false;
       scene.add(shape);
-      ghosts.set(part, { cushion, shape, edge });
+      ghosts.set(part, { cushion, shape });
     }
     setStatus("ready");
     schedule();
-  }, undefined, fail);
+  }).catch(fail);
 
   return {
     sync() {
@@ -318,9 +319,7 @@ function createViewer(
         mixer?.uncacheRoot(model);
         disposeModel(model);
       }
-      for (const ghost of ghosts.values()) ghost.edge.dispose();
       ghostFill.dispose();
-      ghostEdge.dispose();
       shadow.geometry.dispose();
       shadowMaterial.dispose();
       shadowTexture.dispose();
@@ -333,7 +332,10 @@ function createViewer(
 
 
 
-type Drag = { id: number; origin: Point; direction: Point; from: number; extent: number };
+type Drag = {
+  id: number; origin: Point; direction: Point; from: number; extent: number;
+  blocked?: boolean; attempted?: boolean; liftOrigin?: Point;
+};
 type Manipulation = {
   latch: Drag | null;
   cushion: Drag | null;
@@ -353,21 +355,23 @@ export default function BenchView(props: Props) {
   const surface = useRef<HTMLDivElement>(null);
   const latch = useRef<HTMLButtonElement>(null);
   const cushion = useRef<HTMLButtonElement>(null);
-  const goalMarker = useRef<HTMLSpanElement>(null);
   const latest = useRef(props);
   const viewer = useRef<ReturnType<typeof createViewer> | null>(null);
   const manipulation = useRef(idle());
   const [status, setStatus] = useState<"loading" | "ready" | "failed">("loading");
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [sketchAngle, setSketchAngle] = useState<number>();
   const [unlocked, setUnlocked] = useState(false);
   const [aligned, setAligned] = useState(false);
   const exercise = controlsByPart[props.part];
 
   useEffect(() => {
     if (!surface.current) return;
+    setStatus("loading");
     let instance: ReturnType<typeof createViewer>;
     try {
       instance = createViewer(surface.current, (control) => control === "latch" ? latch.current : cushion.current,
-        () => goalMarker.current, () => latest.current, setStatus);
+        () => latest.current, setStatus);
       viewer.current = instance;
     } catch {
       setStatus("failed");
@@ -377,7 +381,7 @@ export default function BenchView(props: Props) {
       instance.dispose();
       viewer.current = null;
     };
-  }, []);
+  }, [loadAttempt]);
 
   useEffect(() => {
     latest.current = props;
@@ -391,7 +395,7 @@ export default function BenchView(props: Props) {
       viewer.current?.preview();
       setUnlocked(false);
       setAligned(false);
-      latest.current.onPreview(undefined);
+      setSketchAngle(undefined);
     }
     cancel();
     window.addEventListener("blur", cancel);
@@ -399,10 +403,10 @@ export default function BenchView(props: Props) {
   }, [props.part, props.paused]);
 
   useEffect(() => {
-    if (props.keyboardControls && !props.paused && status !== "loading") {
+    if (latest.current.inputMode !== "touch" && !props.paused && status !== "loading") {
       modelRoot.current?.focus({ preventScroll: true });
     }
-  }, [props.part, props.keyboardControls, props.paused, status]);
+  }, [props.part, props.paused, status]);
 
   function updatePreview() {
     const active = manipulation.current;
@@ -410,7 +414,7 @@ export default function BenchView(props: Props) {
     setUnlocked(active.pull >= .78);
     const notch = active.angle === undefined ? undefined : benchNotches[Math.round(active.angle * lastNotch)];
     setAligned(notch !== undefined && notch === props.target);
-    props.onPreview(notch);
+    if (status === "failed") setSketchAngle(active.angle);
   }
 
   function relock(commit: boolean) {
@@ -420,7 +424,7 @@ export default function BenchView(props: Props) {
     viewer.current?.preview();
     setUnlocked(false);
     setAligned(false);
-    props.onPreview(undefined);
+    setSketchAngle(undefined);
     if (commit && active.pull >= .78 && active.angle !== undefined) {
       props.onAdjust(benchNotches[Math.round(active.angle * lastNotch)]);
     }
@@ -429,7 +433,8 @@ export default function BenchView(props: Props) {
   function startDrag(event: PointerEvent<HTMLElement>, control: Control) {
     if (status === "loading" || props.paused || event.button !== 0) return;
     const active = manipulation.current;
-    if (active[control] || (control === "latch" ? active.keyboard : active.pull < .78)) return;
+    if (active[control] || (control === "latch" && (active.keyboard || active.cushion))) return;
+    props.onManipulate?.();
     viewer.current?.orbit(false);
     const button = event.currentTarget;
     button.setPointerCapture(event.pointerId);
@@ -440,6 +445,7 @@ export default function BenchView(props: Props) {
       direction: viewer.current?.direction(control) ?? (control === "latch" ? { x: 1, y: 0 } : { x: 0, y: -1 }),
       from: control === "latch" ? 0 : active.angle ?? props.notch / lastNotch,
       extent: (control === "latch" ? 27 : 87) * scale,
+      blocked: control === "cushion" && active.pull < .78,
     };
   }
 
@@ -447,12 +453,29 @@ export default function BenchView(props: Props) {
     const active = manipulation.current;
     const drag = active[control];
     if (!drag || drag.id !== event.pointerId) return;
+    if (drag.blocked) {
+      if (!drag.attempted && Math.hypot(event.clientX - drag.origin.x, event.clientY - drag.origin.y) >= 7) {
+        drag.attempted = true;
+        props.onLockedAttempt();
+      }
+      return;
+    }
+    if (control === "latch" && drag.liftOrigin) {
+      const direction = viewer.current?.direction("cushion") ?? { x: 0, y: -1 };
+      const travel = (event.clientX - drag.liftOrigin.x) * direction.x + (event.clientY - drag.liftOrigin.y) * direction.y;
+      active.angle = Math.max(0, Math.min(1, props.notch / lastNotch + travel / (drag.extent * 87 / 27)));
+      updatePreview();
+      return;
+    }
     const distance = (event.clientX - drag.origin.x) * drag.direction.x
       + (event.clientY - drag.origin.y) * drag.direction.y;
     const value = Math.max(0, Math.min(1, drag.from + distance / drag.extent));
     if (control === "latch") {
       // Once open, the latch stays open only while this pointer is held.
-      if (active.pull < .78) active.pull = value >= .78 ? 1 : value;
+      if (active.pull < .78) {
+        active.pull = value >= .78 ? 1 : value;
+        if (active.pull === 1 && event.pointerType === "mouse") drag.liftOrigin = { x: event.clientX, y: event.clientY };
+      }
     } else {
       active.angle = value;
     }
@@ -466,6 +489,8 @@ export default function BenchView(props: Props) {
     active[control] = null;
     if (control === "latch") {
       relock(!cancelled);
+    } else if (drag.blocked) {
+      if (!active.latch && !active.keyboard) viewer.current?.orbit(true);
     } else if (cancelled) {
       active.angle = drag.from;
       updatePreview();
@@ -478,6 +503,7 @@ export default function BenchView(props: Props) {
     const active = manipulation.current;
     if (event.code === "Space") {
       event.preventDefault();
+      if (!event.repeat) props.onManipulate?.();
       if (!active.latch) {
         viewer.current?.orbit(false);
         active.keyboard = true;
@@ -486,11 +512,15 @@ export default function BenchView(props: Props) {
       }
       return;
     }
-    if (active.pull < .78) return;
     const up = event.key === "ArrowUp" || event.key === "ArrowRight";
     const down = event.key === "ArrowDown" || event.key === "ArrowLeft";
     if (!up && !down) return;
     event.preventDefault();
+    if (!event.repeat) props.onManipulate?.();
+    if (active.pull < .78) {
+      if (!event.repeat) props.onLockedAttempt();
+      return;
+    }
     const step = Math.round((active.angle ?? props.notch / lastNotch) * lastNotch);
     active.angle = Math.max(0, Math.min(lastNotch, step + (up ? 1 : -1))) / lastNotch;
     updatePreview();
@@ -498,7 +528,8 @@ export default function BenchView(props: Props) {
 
   return (
     <div ref={modelRoot} className="bench-view" data-model={status} data-unlocked={unlocked || undefined} data-aligned={aligned || undefined}
-      tabIndex={0} aria-label="Трёхмерная скамья" aria-describedby={props.paused ? undefined : "bench-operation"}
+      tabIndex={0} aria-label={status === "failed" ? "Схема скамьи" : "Трёхмерная скамья"}
+      aria-describedby={props.paused ? undefined : "bench-operation"}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) startDrag(event, "cushion");
       }}
@@ -518,17 +549,22 @@ export default function BenchView(props: Props) {
         if (!event.currentTarget.contains(event.relatedTarget) && manipulation.current.keyboard) relock(false);
       }}>
       <div className="bench-canvas" ref={surface} hidden={status === "failed"} />
-      {status !== "ready" && <p className="bench-status" role="status">{status === "failed"
-        ? "Модель не загрузилась. Движения можно попробовать по меткам."
-        : "Загружается 3D-модель…"}</p>}
+      {status === "loading" && <p className="bench-status" role="status">Загружается 3D-модель…</p>}
+      {status === "failed" && <>
+        <BenchSketch part={props.part} pose={props.pose} angle={sketchAngle} target={props.paused ? undefined : props.target} />
+        <div className="bench-failure">
+          <p role="status">3D-модель не загрузилась. Регулировка доступна на схеме.</p>
+          <button type="button" className="button quiet" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>Повторить 3D</button>
+        </div>
+      </>}
       {status === "ready" && (
         <button type="button" className="bench-camera-button" aria-label="Вернуть исходный ракурс"
-          title="Вернуть исходный ракурс" onClick={() => viewer.current?.resetView()}><Icon name="rotate" size={20} /></button>
+          title="Вернуть исходный ракурс" onClick={() => viewer.current?.resetView()}><span><Icon name="rotate" size={16} /></span></button>
       )}
-      {status === "ready" && props.target !== undefined && <span ref={goalMarker} className="bench-goal-marker" aria-hidden="true" />}
       {status !== "loading" && !props.paused && (["latch", "cushion"] as const).map((control) => (
         <button type="button" className="bench-marker" data-bench-control={control}
           data-active={unlocked || undefined}
+          data-hotspot={control === "latch" && props.highlightLatch || undefined}
           key={control} ref={control === "latch" ? latch : cushion} tabIndex={-1}
           aria-label={exercise[control].label}
           onPointerDown={(event) => startDrag(event, control)}
@@ -536,9 +572,28 @@ export default function BenchView(props: Props) {
           onPointerUp={(event) => finishDrag(event, control, false)}
           onPointerCancel={(event) => finishDrag(event, control, true)}
           onLostPointerCapture={(event) => finishDrag(event, control, true)}>
-          <Icon name="arrow" size={24} />
+          {control === "cushion" && unlocked && <Icon name="arrow" size={15} />}
         </button>
       ))}
+    </div>
+  );
+}
+
+function BenchSketch({ part, pose, angle, target }: { part: BenchPart; pose: BenchPose; angle?: number; target?: BenchNotch }) {
+  const backrest = part === "backrest" ? angle ?? pose.RaiseBackrest : pose.RaiseBackrest;
+  const seat = part === "seat" ? angle ?? pose.RaiseSeat : pose.RaiseSeat;
+  return (
+    <div className="bench-sketch" aria-hidden="true" style={{
+      "--backrest": 42 * backrest + "deg", "--seat": -20 * seat + "deg",
+      "--sketch-goal": target === undefined ? undefined : target / lastNotch * (part === "backrest" ? 42 : -20) + "deg",
+    } as CSSProperties}>
+      <span className="bench-sketch-base" />
+      <span className="bench-sketch-support" data-side="left" />
+      <span className="bench-sketch-support" data-side="right" />
+      {target !== undefined && <span className="bench-sketch-pad sketch-goal" data-part={part} />}
+      <span className="bench-sketch-pad" data-part="backrest" />
+      <span className="bench-sketch-pad" data-part="seat" />
+      <span className="bench-sketch-pin" />
     </div>
   );
 }
