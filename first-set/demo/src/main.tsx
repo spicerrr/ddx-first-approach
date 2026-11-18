@@ -227,7 +227,7 @@ function App() {
 
           <main className={"shell main-shell" + (stationScreen && spatial ? " spatial-shell" : "")}>
             {view === "home" && <Home heading={heading} training={openTraining}
-              calendar={() => setView("calendar")} startPoint={() => setView("start-point")} />}
+              calendar={() => setView("calendar")} action={() => setView("action")} startPoint={() => setView("start-point")} />}
             {view === "start-point" && <ClubStartPoint heading={heading} begin={begin} training={openTraining} />}
             {view === "calendar" && <ClubCalendar heading={heading} training={openTraining} />}
             {view === "action" && <ClubAction heading={heading} />}
