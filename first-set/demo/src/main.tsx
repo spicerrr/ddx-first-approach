@@ -26,7 +26,7 @@ function App() {
   const savedCount = useRef(completedStationCount(session));
   const [view, setView] = useState<View>("home");
   const [overlay, setOverlay] = useState<Overlay>();
-  const [training, setTraining] = useState<{ target: Training; from: EntryView }>({ target: "smart-start", from: "home" });
+  const [training, setTraining] = useState<{ target: Training; from: ClubTab }>({ target: "smart-start", from: "home" });
   const [inputMode, setInputMode] = useState(initialInputMode);
   const [soundOn, setSoundOn] = useState(true);
   const preview = useRef<HTMLDivElement>(null);
@@ -133,9 +133,8 @@ function App() {
   }
 
   function openTraining(target: Training) {
-    if (view === "training") return;
-    setOverlay(undefined);
-    setTraining({ target, from: view });
+    if (!clubTab) return;
+    setTraining({ target, from: clubTab });
     setView("training");
   }
 
@@ -168,11 +167,8 @@ function App() {
     return result;
   }
 
-  function trainingLink(target: Training) {
-    const source = training.from === "play" ? "station" : training.from;
-    if (source === "start-point" || source === "station" || source === "finish") {
-      track({ eventType: "training_cta_clicked", source, training: target });
-    }
+  function trainingLink(source: "club" | "finish", target: Training) {
+    track({ eventType: "training_cta_clicked", source, training: target });
   }
 
   function leaveFinish() {
@@ -228,14 +224,14 @@ function App() {
           <main className={"shell main-shell" + (stationScreen && spatial ? " spatial-shell" : "")}>
             {view === "home" && <Home heading={heading} training={openTraining}
               calendar={() => setView("calendar")} action={() => setView("action")} startPoint={() => setView("start-point")} />}
-            {view === "start-point" && <ClubStartPoint heading={heading} begin={begin} training={openTraining} />}
+            {view === "start-point" && <ClubStartPoint heading={heading} begin={begin} />}
             {view === "calendar" && <ClubCalendar heading={heading} training={openTraining} />}
             {view === "action" && <ClubAction heading={heading} />}
             {view === "route" && <Route heading={heading} progress={session} begin={enterStation} />}
             {view === "training" && <TrainingInfo heading={heading} active={training.target}
-              back={() => setView(training.from)} onLink={trainingLink} />}
+              back={() => setView(training.from)} onLink={(target) => trainingLink("club", target)} />}
 
-            {complete && <Finish heading={heading} training={openTraining} startPoint={leaveFinish} />}
+            {complete && <Finish heading={heading} onLink={(target) => trainingLink("finish", target)} startPoint={leaveFinish} />}
             {stationScreen && (
               <section className={"game" + (spatial ? " game-spatial" : "")} key={station.stage} data-completed={lesson || undefined}>
                 <div className="station-content" inert={sceneResult}>
@@ -291,7 +287,6 @@ function App() {
               setOverlay(undefined);
               overlay.options.demo?.();
             }}><Icon name="play" size={18} /> Показать приём</SceneButton>}
-            <SceneButton type="button" className="button quiet" onActivate={() => openTraining("intro")}>Занятия с тренером</SceneButton>
             <SceneButton type="button" className="button quiet" aria-label="Звук" aria-pressed={soundOn} onActivate={() => {
               enableAudio(!soundOn);
               setSoundOn(!soundOn);

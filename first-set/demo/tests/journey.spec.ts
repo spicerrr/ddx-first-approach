@@ -30,6 +30,16 @@ test("четыре станции, перетаскивание снарядов
   const avatar = status.locator(".coach-avatar");
   const avatarSize = () => avatar.evaluate((element: HTMLElement) => [element.offsetWidth, element.offsetHeight]);
   const itemsOnFloor = page.locator(".gym-floor [data-location='FLOOR']");
+  await page.context().route("https://www.ddxfitness.ru/group-training/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "<title>Расписание DDX</title>" }));
+  async function openSchedule(name: string, path: string) {
+    const link = page.getByRole("link", { name, exact: true });
+    const href = "https://www.ddxfitness.ru/group-training/" + path + "/";
+    await expect(link).toHaveAttribute("href", href);
+    const [schedule] = await Promise.all([page.waitForEvent("popup"), isMobile ? link.tap() : link.click()]);
+    await expect(schedule).toHaveURL(href);
+    await schedule.close();
+  }
 
   await page.goto("");
   await expect(button(page, "Точка старта")).toBeVisible();
@@ -44,16 +54,16 @@ test("четыре станции, перетаскивание снарядов
   await expect(page.getByRole("heading", { name: "Action", level: 1 })).toBeVisible();
   await expect(button(page, "Открыть маршрут")).toHaveCount(0);
   await press("Главная");
-  await expect(button(page, "Открыть «Первый подход»")).toBeInViewport();
-  await press("Открыть «Первый подход»");
+  await press("Тренеры");
+  await openSchedule("Выбрать время с тренером", "3076");
+  await press("Назад");
+  const banner = button(page, "Точка старта");
+  await expect(banner).toBeInViewport();
+  await expect(banner.locator("img")).toHaveAttribute("src", /coach-greeting\.webp$/);
+  await press("Точка старта");
   await expect(page.getByRole("heading", { name: "Точка старта" })).toBeVisible();
   await expect(page.locator("#club-approach").getByRole("heading")).toHaveText("Первый подход");
-  await press("Занятия с тренером");
-  const trainingLink = page.getByRole("link").first();
-  await expect(trainingLink).toHaveAttribute("href", "https://www.ddxfitness.ru/group-training/3076/");
-  await trainingLink.evaluate((node) => node.addEventListener("click", (event) => event.preventDefault(), { once: true }));
-  await trainingLink.click();
-  await press("Назад");
+  await expect(page.getByRole("main").getByRole("button")).toHaveCount(1);
   await capture(page, info, "01a-start-point");
   await press("Открыть маршрут");
   await press("Выйти");
@@ -299,7 +309,13 @@ test("четыре станции, перетаскивание снарядов
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Первый подход пройден");
   await expect(page.getByRole("list", { name: "Пройденные станции" }).getByRole("listitem")).toHaveCount(4);
   await expect(page.locator(".finish-medal img")).toHaveAttribute("src", /finish-medal\.webp$/);
-  await expect(page.locator(".finish-next")).toContainText("Для конкретных тренажёров");
+  await expect(page.getByRole("heading", { name: "Выбери тренировку" })).toBeVisible();
+  await expect(page.locator(".finish-next").getByRole("link")).toHaveCount(2);
+  await capture(page, info, "09-finish");
+  await openSchedule("Выбрать занятие Smart Start", "2628");
+  await openSchedule("Выбрать время с тренером", "3076");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Первый подход пройден");
+  expect(await page.evaluate(() => localStorage.getItem("ddx-first-approach-completed-v1"))).toBe("4");
   const events = await page.evaluate(() => (window as Window & {
     __approachEvents: Array<{ eventType: string; stage?: string; schemaVersion: string; scenarioVersion: string; source?: string; training?: string }>;
   }).__approachEvents);
@@ -310,13 +326,11 @@ test("четыре станции, перетаскивание снарядов
   }
   expect(kinds("first_approach_exposed").length).toBeGreaterThan(0);
   expect(kinds("first_approach_skipped")).toHaveLength(1);
-  expect(kinds("training_cta_clicked")).toEqual([expect.objectContaining({ source: "start-point", training: "intro" })]);
+  expect(kinds("training_cta_clicked").map(({ source, training }) => [source, training])).toEqual([
+    ["club", "intro"], ["finish", "smart-start"], ["finish", "intro"],
+  ]);
   expect(kinds("first_approach_hint_level_reached").length).toBeGreaterThan(0);
   expect(events.every((event) => event.schemaVersion === "2" && event.scenarioVersion === "2.0")).toBe(true);
-  await capture(page, info, "09-finish");
-  await press("Занятия с тренером");
-  await expect(page.getByRole("link").first()).toHaveAttribute("href", "https://www.ddxfitness.ru/group-training/3076/");
-  await press("Назад");
   await press("Вернуться в Точку старта");
   await expect(page.getByRole("heading", { name: "Точка старта" })).toBeVisible();
   await noOverflow(page);
@@ -337,10 +351,8 @@ test("выход сохраняет только завершённые стан
   await expect(prop(page, "DB_8_A")).toHaveAttribute("data-location", "RACK_8");
 
   await press("Помощь");
-  await press("Занятия с тренером");
-  await expect(page.getByRole("link").first()).toHaveAttribute("href", "https://www.ddxfitness.ru/group-training/3076/");
-  await expect(page.getByRole("link", { name: "Посмотреть занятия Smart Start" })).toHaveAttribute("href", "https://www.ddxfitness.ru/smart-start/");
-  await press("Назад");
+  await expect(button(page, "Занятия с тренером")).toHaveCount(0);
+  await press("Вернуться к станции");
   await expect(prop(page, "DB_8_A")).toHaveAttribute("data-location", "RACK_8");
 
   for (const pair of placements.dumbbells.slice(1)) await move(pair);

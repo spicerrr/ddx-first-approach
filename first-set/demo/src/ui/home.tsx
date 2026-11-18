@@ -123,23 +123,23 @@ export function Home({ heading, training, calendar, startPoint, action }: {
         <SceneButton type="button" className="club-story story-smart" onActivate={() => training("smart-start")}>
           <img src={asset("nav-mat")} alt="" /><span>Smart Start</span>
         </SceneButton>
-        <SceneButton type="button" className="club-story story-gym" onActivate={startPoint}>
-          <img src={asset("nav-dumbbell-12")} alt="" /><span>Точка старта</span>
-        </SceneButton>
-        <SceneButton type="button" className="club-story story-coach" onActivate={() => training("intro")}>
-          <img src={asset("coach-neutral")} alt="" /><span>С тренером</span>
+        <SceneButton type="button" className="club-story story-week" onActivate={calendar}>
+          <Icon name="calendar" size={36} /><span>На неделе</span>
         </SceneButton>
         <SceneButton type="button" className="club-story story-action" onActivate={action} aria-label="Видеотренировки DDX Action">
           <img src={asset("nav-bench")} alt="" /><span>DDX Action</span>
         </SceneButton>
+        <a className="club-story story-clubs" href="https://www.ddxfitness.ru/clubs/" target="_blank" rel="noopener noreferrer">
+          <Icon name="pin" size={36} /><span>Клубы DDX</span>
+        </a>
       </section>
-      <SceneButton type="button" className="club-lead" onActivate={startPoint} aria-label="Открыть «Первый подход»">
+      <SceneButton type="button" className="club-lead" onActivate={startPoint} aria-labelledby="club-lead-title" aria-describedby="club-lead-description">
         <span className="club-lead-copy">
-          <strong>Первый подход</strong>
-          <span>Потренируйся со снарядами перед первым визитом</span>
+          <strong id="club-lead-title">Точка старта</strong>
+          <span id="club-lead-description">Познакомься с залом до первой тренировки</span>
+          <span className="club-lead-action">Открыть <Icon name="arrow" size={14} /></span>
         </span>
-        <img src={asset("nav-dumbbell-12")} alt="" />
-        <Icon name="arrow" size={18} />
+        <img src={asset("coach-greeting")} alt="" fetchPriority="high" />
       </SceneButton>
       <section className="club-calendar home-calendar" aria-labelledby="home-calendar-title">
         <h2 id="home-calendar-title">
@@ -174,14 +174,11 @@ export function ClubAction({ heading }: { heading: Heading }) {
   );
 }
 
-export function ClubStartPoint({ heading, begin, training }: { heading: Heading; begin: () => void; training: TrainingLink }) {
+export function ClubStartPoint({ heading, begin }: { heading: Heading; begin: () => void }) {
   return (
     <section className="club-subpage club-start-point">
       <h1 ref={heading} tabIndex={-1}>Точка старта</h1>
       <ApproachCard begin={begin} />
-      <SceneButton type="button" className="button ghost" onActivate={() => training("intro")}>
-        Занятия с тренером <Icon name="arrow" size={17} />
-      </SceneButton>
     </section>
   );
 }

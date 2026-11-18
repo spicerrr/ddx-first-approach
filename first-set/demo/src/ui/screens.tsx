@@ -85,29 +85,29 @@ export function SceneResult({ heading, stage, next }: { heading: Heading; stage:
   );
 }
 
-export function Finish({ heading, training, startPoint }: {
+export function Finish({ heading, onLink, startPoint }: {
   heading: Heading;
-  training: (target: Training) => void;
+  onLink: (target: Training) => void;
   startPoint: () => void;
 }) {
   return (
     <section className="finish">
-      <div className="finish-hero">
-        <div className="finish-award">
-          <FinishMedal />
+      <header className="finish-hero">
+        <FinishMedal />
+        <div>
+          <h1 ref={heading} tabIndex={-1}>Первый подход <span>пройден</span></h1>
+          <ul className="finish-stations" aria-label="Пройденные станции">
+            {stations.map(({ stage, title }) => <li key={stage}><Icon name="check" size={13} />{title}</li>)}
+          </ul>
         </div>
-        <h1 ref={heading} tabIndex={-1}>Первый подход <span>пройден</span></h1>
-        <ul className="finish-stations" aria-label="Пройденные станции">
-          {stations.map(({ stage, title }) => <li key={stage}><Icon name="check" size={16} />{title}</li>)}
-        </ul>
-      </div>
-      <div className="finish-next">
-        <p>Для конкретных тренажёров можно использовать видеоинструкции DDX по QR-коду.</p>
-        <div className="finish-actions">
-          <SceneButton type="button" className="button primary" onActivate={startPoint}>Вернуться в Точку старта <Icon name="arrow" /></SceneButton>
-          <SceneButton type="button" className="button quiet" onActivate={() => training("intro")}>Занятия с тренером</SceneButton>
-        </div>
-      </div>
+      </header>
+      <section className="finish-next" aria-labelledby="finish-next-title">
+        <h2 id="finish-next-title">Выбери тренировку</h2>
+        <TrainingOptions titleAs="h3" onLink={onLink} />
+      </section>
+      <SceneButton type="button" className="button quiet finish-back" onActivate={startPoint}>
+        <Icon name="back" size={16} /> Вернуться в Точку старта
+      </SceneButton>
     </section>
   );
 }
@@ -115,44 +115,57 @@ export function Finish({ heading, training, startPoint }: {
 const trainingOptions = {
   "smart-start": {
     name: "Smart Start",
-    description: "30 минут в мини-группе. Выбираешь группу мышц, а тренер показывает упражнения и помогает с техникой.",
-    action: "Посмотреть занятия Smart Start",
-    href: "https://www.ddxfitness.ru/smart-start/",
-    icon: "gym",
+    format: "Мини-группа",
+    duration: "30 минут",
+    description: "Попробуешь тренажёры. Тренер поможет с техникой и подбором веса.",
+    action: "Выбрать занятие Smart Start",
+    href: "https://www.ddxfitness.ru/group-training/2628/",
+    art: "nav-mat",
   },
   intro: {
     name: "Ознакомительная тренировка",
-    description: "Для первого визита. Тренер покажет зоны твоего клуба и проведёт пробную тренировку.",
-    action: "Открыть расписание по клубам",
+    format: "С персональным тренером",
+    duration: "55 минут",
+    description: "Осмотришь зал, пройдёшь замер InBody и попробуешь упражнения с тренером.",
+    action: "Выбрать время с тренером",
     href: "https://www.ddxfitness.ru/group-training/3076/",
-    icon: "person",
+    art: "coach-explaining",
   },
 } as const;
 
+function TrainingOptions({ first = "smart-start", titleAs: Title = "h2", onLink }: {
+  first?: Training; titleAs?: "h2" | "h3"; onLink: (target: Training) => void;
+}) {
+  const order: Training[] = first === "smart-start" ? ["smart-start", "intro"] : ["intro", "smart-start"];
+  return (
+    <div className="training-options">
+      {order.map((id) => {
+        const option = trainingOptions[id];
+        return (
+          <article key={id} className="training-option" data-format={id} aria-labelledby={`training-title-${id}`}>
+            <div className="training-option-heading">
+              <p className="training-meta">{option.format} <span>· {option.duration}</span></p>
+              <Title id={`training-title-${id}`}>{option.name}</Title>
+            </div>
+            <div className="training-art" aria-hidden="true"><img src={asset(option.art)} alt="" /></div>
+            <p className="training-description">{option.description}</p>
+            <a className="training-cta" href={option.href} onClick={() => onLink(id)} target="_blank" rel="noopener noreferrer">
+              {option.action} <Icon name="external" size={17} />
+            </a>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
 export function TrainingInfo({ heading, active, back, onLink }: { heading: Heading; active: Training; back: () => void;
   onLink: (target: Training) => void }) {
-  const alternate: Training = active === "smart-start" ? "intro" : "smart-start";
-  const options: Training[] = [active, alternate];
   return (
     <section className="training">
       <SceneButton type="button" className="button quiet back-link" onActivate={back}><Icon name="back" size={19} /> Назад</SceneButton>
       <h1 ref={heading} tabIndex={-1}>Первый визит<br /><span>с тренером</span></h1>
-      <p className="intro-text">Можно начать с визита в свой клуб или выбрать короткое занятие на нужную группу мышц. Запись доступна в приложении DDX Fitness.</p>
-      <div className="training-options">
-        {options.map((id) => {
-          const option = trainingOptions[id];
-          return (
-            <article key={id} className="training-option">
-              <span className="recap-icon"><Icon name={option.icon} size={22} /></span>
-              <h2>{option.name}</h2>
-              <p>{option.description}</p>
-              <a className={`button ${id === active ? "primary" : "secondary"}`} href={option.href} onClick={() => onLink(id)} target="_blank" rel="noopener noreferrer">
-                {option.action} <Icon name="external" size={18} />
-              </a>
-            </article>
-          );
-        })}
-      </div>
+      <TrainingOptions first={active} onLink={onLink} />
     </section>
   );
 }

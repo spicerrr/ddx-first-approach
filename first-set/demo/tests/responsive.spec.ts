@@ -74,6 +74,25 @@ for (const width of [320, 375, 402, 430, 768, 1440]) {
       }
     }
     await expect(button(page, "Вернуться в Точку старта")).toBeVisible();
+    for (const link of await page.locator(".finish-next").getByRole("link").all()) {
+      await expect(link).toBeInViewport({ ratio: 1 });
+      expect(await link.evaluate((el) => el.clientHeight)).toBeGreaterThanOrEqual(44);
+    }
     await noOverflow(page);
   });
 }
+
+test("баннер и обе кнопки расписания видны на коротком мобильном экране", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("ddx-first-approach-completed-v1", "4"));
+  for (const [width, height] of [[320, 568], [375, 667], [390, 664]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("");
+    const banner = button(page, "Точка старта");
+    await expect(banner).toBeInViewport({ ratio: 1 });
+    await expect(page.locator(".club-stories").getByRole("button", { name: "Точка старта" })).toHaveCount(0);
+    await openRoute(page);
+    await expect(page.getByRole("link", { name: "Выбрать занятие Smart Start" })).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("link", { name: "Выбрать время с тренером" })).toBeInViewport({ ratio: 1 });
+    await noOverflow(page);
+  }
+});

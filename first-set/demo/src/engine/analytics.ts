@@ -1,7 +1,7 @@
 import { scenarioVersion, type StationId } from "./scenario";
 import type { HintLevel } from "./hints";
 
-type TrainingSource = "start-point" | "station" | "finish";
+type TrainingSource = "club" | "finish";
 
 type AnalyticsEvent =
   | { eventType: "first_approach_exposed" | "first_approach_started" | "first_approach_completed" | "first_approach_skipped" }

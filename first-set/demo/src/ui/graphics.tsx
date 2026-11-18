@@ -16,6 +16,7 @@ const iconPaths = {
   help: <><circle cx="12" cy="12" r="9"/><path d="M9.1 9.2c.2-1.6 1.7-2.3 2.9-2.3 1.5 0 2.9 1 2.9 2.5 0 1.9-2.9 2.1-2.9 4m0 2.8h.01"/></>,
   home: <><path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9Z"/><path d="M9 16h6"/></>,
   calendar: <><rect x="4" y="6" width="16" height="15" rx="2"/><path d="M8 3v5m8-5v5M4 11h16M8 15h.01m4 0h.01m4 0h.01M8 18h.01m4 0h.01"/></>,
+  pin: <><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 0 1 14 0Z"/><circle cx="12" cy="10" r="2.3"/></>,
   play: <><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4Z"/></>,
   bell: <><path d="M18 8a6 6 0 1 0-12 0c0 6-3 7-3 9h18c0-2-3-3-3-9M10 21h4"/></>,
   chevron: <path d="m9 6 6 6-6 6"/>,
