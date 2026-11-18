@@ -44,7 +44,8 @@ test("четыре станции, перетаскивание снарядов
   await expect(page.getByRole("heading", { name: "Action", level: 1 })).toBeVisible();
   await expect(button(page, "Открыть маршрут")).toHaveCount(0);
   await press("Главная");
-  await press("Точка старта");
+  await expect(button(page, "Открыть «Первый подход»")).toBeInViewport();
+  await press("Открыть «Первый подход»");
   await expect(page.getByRole("heading", { name: "Точка старта" })).toBeVisible();
   await expect(page.locator("#club-approach").getByRole("heading")).toHaveText("Первый подход");
   await press("Занятия с тренером");

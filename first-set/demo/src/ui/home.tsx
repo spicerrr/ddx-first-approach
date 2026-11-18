@@ -49,7 +49,7 @@ export function ClubNavigation({ tab, go, training }: { tab: ClubTab; go: (tab: 
   );
 }
 
-function ApproachCard({ begin }: { begin: () => void }) {
+function ApproachCard({ begin, action = "Открыть маршрут" }: { begin: () => void; action?: string }) {
   return (
     <article className="onboarding-card" aria-labelledby="approach-title" id="club-approach">
       <img className="approach-photo" src={asset("coach-neutral")} alt="" fetchPriority="high" />
@@ -57,7 +57,7 @@ function ApproachCard({ begin }: { begin: () => void }) {
         <h2 id="approach-title">Первый подход</h2>
         <p>Четыре задания со снарядами перед первым визитом в зал.</p>
         <SceneButton type="button" className="button primary" onActivate={begin}>
-          Открыть маршрут <Icon name="arrow" size={17} />
+          {action} <Icon name="arrow" size={17} />
         </SceneButton>
       </div>
     </article>
@@ -129,6 +129,7 @@ export function Home({ heading, training, calendar, startPoint }: {
           <img src={asset("coach-neutral")} alt="" /><span>Тренировка<br />с тренером</span>
         </SceneButton>
       </section>
+      <ApproachCard begin={startPoint} action="Открыть «Первый подход»" />
       <section className="club-calendar" aria-labelledby="home-calendar-title">
         <h2 id="home-calendar-title">
           <SceneButton type="button" className="club-section-link" onActivate={calendar}>
