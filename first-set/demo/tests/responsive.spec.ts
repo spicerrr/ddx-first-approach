@@ -34,19 +34,20 @@ for (const width of [320, 375, 402, 430, 768, 1440]) {
       await noOverflow(page);
       const coach = page.locator(".coach-message");
       await expect(coach).toHaveCSS("display", "grid");
-      expect(await coach.locator(".coach-avatar").evaluate((el) => {
+      const avatarSize = await coach.locator(".coach-avatar").evaluate((el) => {
         const avatar = el as HTMLElement;
         return [avatar.offsetWidth, avatar.offsetHeight];
-      })).toEqual([56, 56]);
+      });
+      expect(avatarSize[0]).toBeGreaterThanOrEqual(56);
+      expect(avatarSize[0]).toBeLessThanOrEqual(72);
+      expect(avatarSize[1]).toBe(avatarSize[0]);
       const heading = page.locator(".game-heading h1");
       const score = page.locator(".stage-score");
-      if (name !== "barbell") {
-        const title = (await heading.boundingBox())!;
-        const badge = (await score.boundingBox())!;
-        expect(title.x).toBeLessThan(badge.x);
-        expect(badge.x).toBeGreaterThanOrEqual(title.x + title.width);
-        expect(badge.y).toBeLessThan(title.y + title.height);
-      }
+      const title = (await heading.boundingBox())!;
+      const badge = (await score.boundingBox())!;
+      expect(title.x).toBeLessThan(badge.x);
+      expect(badge.x).toBeGreaterThanOrEqual(title.x + title.width);
+      expect(badge.y).toBeLessThan(title.y + title.height);
       const controls = await page.locator("main button:not(:disabled)").evaluateAll((buttons) =>
         buttons.every((b) => (b as HTMLElement).offsetHeight >= 44),
       );

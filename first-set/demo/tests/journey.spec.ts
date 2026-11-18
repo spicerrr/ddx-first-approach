@@ -54,7 +54,9 @@ test("четыре станции, перетаскивание снарядов
   await press("Начать");
   await expect(itemsOnFloor).toHaveCount(6);
   await expect(avatar.locator("img")).toHaveAttribute("src", /coach-neutral\.webp$/);
-  expect(await avatarSize()).toEqual([56, 56]);
+  const initialAvatar = await avatarSize();
+  expect(initialAvatar[0]).toBeGreaterThanOrEqual(68);
+  expect(initialAvatar[1]).toBe(initialAvatar[0]);
   await expect(page.locator('.rack-pair[data-shelf="1"]')).toHaveCount(4);
   await expect(page.locator('.rack-pair[data-shelf="2"]')).toHaveCount(4);
   await expect(page.locator(".gym-floor .scene-backdrop")).toHaveAttribute("src", /dumbbell-rack-empty\.webp$/);
@@ -70,7 +72,7 @@ test("четыре станции, перетаскивание снарядов
   await move(["DB_12_A", "RACK_8"]);
   await expect(status).toContainText("Сверь вес гантели с соседними парами");
   await expect(status.locator(".coach-message[data-tone=hint] img")).toHaveAttribute("src", /coach-neutral\.webp$/);
-  expect(await avatarSize()).toEqual([56, 56]);
+  expect(await avatarSize()).toEqual(initialAvatar);
   await expect(prop(page, "DB_12_A")).toHaveAttribute("data-location", "FLOOR");
   await expect(score(page, 0, 3)).toBeVisible();
   await move(placements.dumbbells[1]);
@@ -245,7 +247,31 @@ test("четыре станции, перетаскивание снарядов
   else await dropTarget(page, "BANDS").click();
   await expect(secondBand).toHaveAttribute("data-location", "BANDS");
   await expect(status).toContainText("Резинки на месте.");
-  const completedEarly = ["BAND_1", "BAND_2", "PLATE_5", "ROLLER_2"];
+
+  const mat = prop(page, "MAT_2");
+  const matShelf = dropTarget(page, "MATS");
+  await expect(matShelf).toHaveAccessibleName("Нижняя полка для ковриков");
+  expect((await matShelf.boundingBox())!.y).toBeGreaterThan((await dropTarget(page, "BLOCKS").boundingBox())!.y);
+  await expect(mat.locator("img")).toHaveAttribute("src", /mat-teal\.webp$/);
+  await move(["MAT_2", "MATS"]);
+  await expect(mat).toHaveAttribute("data-mat", "true");
+  const rolling = mat.locator(".mat-sheet");
+  await expect(rolling).toHaveCSS("animation-name", /unroll-mat/);
+  await expect(mat).not.toHaveAttribute("data-landed", "true");
+  await move(["MAT_1", "MATS"]);
+  const topMat = prop(page, "MAT_1");
+  await expect(topMat).toHaveAttribute("data-location", "MATS");
+  await expect(topMat).not.toHaveAttribute("data-landed", "true");
+  const base = (await rolling.boundingBox())!;
+  const top = (await topMat.locator(".mat-sheet").boundingBox())!;
+  expect(top.x).toBeCloseTo(base.x, 0);
+  expect(top.y).toBeLessThan(base.y);
+  expect(top.y + top.height).toBeGreaterThan(base.y);
+  await expect(mat).toHaveCSS("z-index", "5");
+  await expect(topMat).toHaveCSS("z-index", "6");
+  await expect(status).toContainText("Коврики лежат стопкой на нижней полке.");
+
+  const completedEarly = ["BAND_1", "BAND_2", "PLATE_5", "MAT_1", "MAT_2", "ROLLER_2"];
   for (const pair of placements.inventory) {
     if (!completedEarly.includes(pair[0])) await move(pair);
   }

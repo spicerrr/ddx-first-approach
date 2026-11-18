@@ -71,12 +71,17 @@ function App() {
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
     if (sceneResult) {
-      heading.current?.scrollIntoView({ block: "nearest" });
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const delay = reduceMotion ? 0 : station.stage === "INVENTORY" ? 920 : 320;
+      const timer = window.setTimeout(() => heading.current?.scrollIntoView({
+        block: "nearest", behavior: reduceMotion ? "instant" : "smooth",
+      }), delay);
+      return () => window.clearTimeout(timer);
     } else {
       screen.current?.scrollTo({ top: 0, behavior: "instant" });
       window.scrollTo({ top: 0, behavior: "instant" });
     }
-  }, [focusView, session.stageIndex]);
+  }, [focusView, session.stageIndex, sceneResult, station.stage]);
 
   function home() {
     if (complete) rememberCompleted(0);
@@ -167,7 +172,8 @@ function App() {
   return (
     <div className="phone-preview" ref={preview}>
       <div className="phone-screen">
-        <div className={"app" + (clubTab ? " app-club" : "") + (complete ? " app-finish" : "")} data-view={view} ref={screen}
+        <div className={"app" + (clubTab ? " app-club" : "") + (complete ? " app-finish" : "")} data-view={view}
+          data-station={stationScreen ? station.stage : undefined} ref={screen}
           inert={Boolean(overlay)}
           onKeyDownCapture={(event) => {
             if (!event.altKey && !event.metaKey && !event.ctrlKey) setInputMode("keyboard");
@@ -227,10 +233,10 @@ function App() {
                   <div className="station-brief">
                     <div className="game-heading">
                       <h1 ref={sceneResult ? undefined : heading} tabIndex={-1}>{station.title}</h1>
-                      {station.stage !== "BARBELL" && <p className="stage-score" aria-label={"Выполнено " + placed + " из " + total}>
-                        <strong>{placed}</strong><span> / {total}{station.stage === "DUMBBELLS" && placed === 0 ? " пар" : ""}</span>
-                        {placed === total && <Icon name="check" size={15} />}
-                      </p>}
+                      <p className="stage-score" data-full={placed === total || undefined} aria-label={"Выполнено " + placed + " из " + total}>
+                        <Icon name="check" size={18} /><strong key={placed}>{placed}</strong>
+                        <span>/ {total}{station.stage === "DUMBBELLS" && " пар"}</span>
+                      </p>
                     </div>
                   </div>
                   <GameHelp.Provider value={lesson ? null : {

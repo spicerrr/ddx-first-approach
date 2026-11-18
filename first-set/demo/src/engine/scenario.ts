@@ -29,9 +29,9 @@ export const benchGoals = { backrest: 2, seat: 1 } as const satisfies Record<Ben
 export const inventoryPlateWeights = [5, 10, 15, 20, 25] as const;
 export const plateRackSlot = (weightKg: number) => `PLATES_${weightKg}`;
 const inventoryTargetLabels: Readonly<Record<string, string>> = {
-  MATS: "Верхняя полка для ковриков",
+  MATS: "Нижняя полка для ковриков",
   BLOCKS: "Средняя полка для блоков",
-  ROLLERS: "Нижняя полка для роллов",
+  ROLLERS: "Верхняя полка для роллов",
   BANDS: "Боковые крючки для резинок",
 };
 
@@ -98,7 +98,7 @@ export const stationDetails = {
   DUMBBELLS: {
     name: "Гантели",
     purpose: "Пары и стойка",
-    instruction: "На полу три пары гантелей. Верни их на стойку.",
+    instruction: "Куда встанут три пары с пола? Сверь соседние веса.",
     lessonTitle: "Гантели на месте",
     nextButton: "К штанге",
     takeaway: "Лёгкие пары ставь выше, тяжёлые ниже. На каждой полке вес растёт слева направо.",
@@ -106,7 +106,7 @@ export const stationDetails = {
   BARBELL: {
     name: "Штанга",
     purpose: "Вес и замки",
-    instruction: `Собери штангу весом ${barbell.targetKg} кг. Гриф уже весит ${barbell.shaftKg} кг. Когда закончишь, нажми «Проверить».`,
+    instruction: `Собери ${barbell.targetKg} кг и закрепи диски замками.`,
     lessonTitle: "Штанга собрана",
     nextButton: "К скамье",
     takeaway: "Набирай вес симметрично. Когда диски на месте, надень и защёлкни замки.",
@@ -121,7 +121,7 @@ export const stationDetails = {
   INVENTORY: {
     name: "Инвентарь",
     purpose: "Зоны хранения",
-    instruction: "После подхода на полу осталось 13 предметов. Верни каждый на своё место.",
+    instruction: "Разложи снаряды по местам. Подсказки есть на стойках.",
     lessonTitle: "Проход свободен",
     nextButton: "К контрольной ситуации",
     takeaway: "После подхода верни инвентарь в зоны хранения.",

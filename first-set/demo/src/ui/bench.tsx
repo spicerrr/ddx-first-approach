@@ -31,7 +31,7 @@ const exercises = {
 
 const controls = {
   touch: ["Удерживай фиксатор одним пальцем.", "Другим пальцем меняй положение.", "Отпусти фиксатор."],
-  keyboard: ["Удерживай Space.", "Стрелки меняют положение.", "Отпусти Space."],
+  keyboard: ["Удерживай пробел.", "Стрелками меняй положение.", "Отпусти пробел."],
   mouse: ["Удерживай фиксатор.", "Не отпуская кнопку, веди мышь к контуру.", "Отпусти кнопку мыши."],
 };
 
@@ -56,6 +56,7 @@ export function BenchStation({ progress, submit, inputMode, coach, onLocked }: {
   const alignmentRule = benchRule(part, "alignment");
   const latchHint = coach?.active?.id === lockedRule.id;
   const [hold, move, release] = controls[inputMode];
+  const controlIcon = inputMode === "keyboard" ? "keyboard" : inputMode === "touch" ? "touch" : "mouse";
 
   const pose: BenchPose = {
     RaiseBackrest: progress.benchPositions.backrest / lastNotch,
@@ -94,7 +95,7 @@ export function BenchStation({ progress, submit, inputMode, coach, onLocked }: {
     <section className="bench-station" data-bench-part={part} data-input={inputMode} data-sandbox={complete || undefined}>
       {coach && <CoachFeedback message={complete ? "Скамья настроена: спинка и сиденье зафиксированы." : exercise.task}
         line={coach.line} controls={!waitingForNext && <AssistControls coach={coach} rule={coach.active ?? lockedRule} demo={() => setShowDemo(true)} />} />}
-      <div className="bench-workshop">
+      <div className="bench-workshop station-arena">
         <div className="bench-scene">
           {coach && <div className="bench-hud" aria-hidden="true">
             <span className="bench-hud-rest">{exercise.title}</span>
@@ -124,10 +125,14 @@ export function BenchStation({ progress, submit, inputMode, coach, onLocked }: {
         </div>
         {coach && !waitingForNext && (
           <p className="bench-cue" id="bench-operation" aria-live="polite">
-            <Icon name={inputMode === "keyboard" ? "keyboard" : inputMode === "touch" ? "touch" : "mouse"} size={17} />
-            <span className="bench-cue-rest">{latchHint || inputMode === "keyboard" ? hold : "Поверни модель, чтобы рассмотреть скамью."}</span>
-            <span className="bench-cue-move">{move}</span>
-            <span className="bench-cue-snap">{release}</span>
+            <span className="bench-cue-rest">
+              <span className="bench-cue-step"><span className="cue-icon"><Icon name={controlIcon} size={20} /></span>
+                {complete ? "Поверни модель, чтобы рассмотреть скамью." : hold}</span>
+              {!complete && <><Icon name="arrow" size={18} />
+                <span className="bench-cue-step"><span className="cue-icon"><Icon name={controlIcon} size={20} /></span>{move}</span></>}
+            </span>
+            <span className="bench-cue-move"><span className="cue-icon"><Icon name={controlIcon} size={20} /></span>{move}</span>
+            <span className="bench-cue-snap"><span className="cue-icon"><Icon name="check" size={20} /></span>{release}</span>
           </p>
         )}
         {coach && <SceneButton type="button" className="button quiet bench-help" onActivate={toggleDemo}

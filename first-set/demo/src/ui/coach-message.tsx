@@ -12,7 +12,7 @@ export function CoachMessage({ children, tone = "task", level, controls }: {
       </span>
       <div className="coach-copy">
         <strong>Тренер</strong>
-        <p aria-live="polite" aria-atomic="true">{children}</p>
+        <p aria-live="polite" aria-atomic="true"><span key={typeof children === "string" ? children : tone}>{children}</span></p>
       </div>
       {controls}
     </div>

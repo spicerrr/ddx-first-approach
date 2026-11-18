@@ -20,7 +20,7 @@ export function moveBarbell(assembly: BarbellAssembly, id: string, destination: 
   const prop = barbell.props.find((item) => item.id === id);
   const reject = (message: string, issue?: BarbellIssue) => ({ accepted: false as const, message, issue });
   if (!prop || (destination !== floorId && !barbellSides.includes(destination))) {
-    return reject("Попробуй перенести предмет на втулку или в лоток.");
+    return reject("Попробуй перенести предмет на втулку или обратно на пол.");
   }
 
   const source = barbellSides.find((side) => prop.kind === "disk"
@@ -49,11 +49,11 @@ export function moveBarbell(assembly: BarbellAssembly, id: string, destination: 
 
   const blockedSide = [source, target].find((side) => side && assembly.collars[side]);
   if (blockedSide) {
-    const remove = assembly.locked[blockedSide] ? "Открой рычажок и верни замок в лоток." : "Верни открытый замок в лоток.";
+    const remove = assembly.locked[blockedSide] ? "Открой рычажок и верни замок на пол." : "Верни открытый замок на пол.";
     return reject("Замок держит диски на конце втулки. " + remove + " Затем можно поменять диски.", "blocked-sleeve");
   }
   if (source && assembly.disks[source].at(-1) !== id) {
-    return reject("Начни с крайнего диска. Его можно стянуть в лоток.", "inner-disk");
+    return reject("Начни с крайнего диска. Его можно стянуть с втулки на пол.", "inner-disk");
   }
 
   const disks = { ...assembly.disks };

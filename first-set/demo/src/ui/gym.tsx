@@ -31,11 +31,12 @@ type Prop = Point & {
   pulse?: number | number[];
   cue: Cue;
   fitted?: boolean;
+  mat?: boolean;
   mounted?: { slide: Point; clamp?: { height: number; closed: boolean } };
   dragSrc?: string;
   outermostId?: string;
 };
-type Target = Point & { id: string; label: string; width: number; height: number };
+type Target = Point & { id: string; label: string; width: number; height: number; kind?: string };
 type Held = {
   prop: Prop;
   id: number;
@@ -46,8 +47,10 @@ type Held = {
 };
 type Drag = Point & { prop: Prop; width: number; over?: string };
 type Retreat = Drag & { dx: number; dy: number };
+type Landing = { from: Point; destination: string };
 
-function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = false, highlight, verified, assisted = true, children }: {
+function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = false, highlight, guideItem,
+  verified, assisted = true, prompt, footer, children }: {
   name: string;
   props: readonly Prop[];
   targets: readonly Target[];
@@ -55,33 +58,48 @@ function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = f
   onPick?: (item: string) => void;
   tapToPlace?: boolean;
   highlight?: string;
+  guideItem?: string;
   verified?: boolean;
   assisted?: boolean;
+  prompt?: string;
+  footer?: ReactNode;
   children: ReactNode;
 }) {
   const field = useRef<HTMLDivElement>(null);
   const start = useRef<Held | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [retreat, setRetreat] = useState<Retreat | null>(null);
-  const [landed, setLanded] = useState<readonly string[]>([]);
+  const [landings, setLandings] = useState<Readonly<Record<string, Landing>>>({});
   const [returned, setReturned] = useState<string>();
   const [selected, setSelected] = useState<{ prop: Prop; keyboard: boolean } | null>(null);
 
-  function targetAt(event: PointerEvent) {
+  function scenePoint(point: Point): Point {
     const bounds = field.current!.getBoundingClientRect();
-    const x = (event.clientX - bounds.left) * 100 / bounds.width;
-    const y = (event.clientY - bounds.top) * 100 / bounds.height;
+    return { x: (point.x - bounds.left) * 100 / bounds.width, y: (point.y - bounds.top) * 100 / bounds.height };
+  }
+
+  function targetAt(event: PointerEvent) {
+    const { x, y } = scenePoint({ x: event.clientX, y: event.clientY });
     return targets.find((target) =>
       Math.abs(x - target.x) <= target.width / 2 && Math.abs(y - target.y) <= target.height / 2,
     )?.id;
   }
 
-  function commit(prop: Prop, target: string) {
+  function clearLanding(id: string) {
+    setLandings((previous) => {
+      if (!previous[id]) return previous;
+      const next = { ...previous };
+      delete next[id];
+      return next;
+    });
+  }
+
+  function commit(prop: Prop, target: string, from: Point = prop) {
     const result = onDrop(prop, target);
     if (result.accepted) {
       setReturned(undefined);
       if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        setLanded((ids) => ids.includes(prop.id) ? ids : [...ids, prop.id]);
+        setLandings((previous) => ({ ...previous, [prop.id]: { from, destination: target } }));
       }
       if (result.progress.phase !== "lesson" && target !== floorId) playFeedback(prop.cue, prop.pulse);
     } else {
@@ -114,7 +132,7 @@ function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = f
       if (Math.hypot(event.clientX - held.origin.x, event.clientY - held.origin.y) < 6) return;
       held.moved = true;
       setSelected(null);
-      setLanded((ids) => ids.filter((id) => id !== held.prop.id));
+      clearLanding(held.prop.id);
     }
     setDrag({
       prop: held.prop, width: held.width,
@@ -135,7 +153,8 @@ function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = f
       return;
     }
     const target = targetAt(event);
-    if (target && commit(held.prop, target).accepted) return;
+    const from = scenePoint({ x: event.clientX - held.offset.x + held.width / 2, y: event.clientY });
+    if (target && commit(held.prop, target, from).accepted) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const source = field.current?.querySelector('[data-scene-item="' + held.prop.id + '"]')?.getBoundingClientRect();
     if (!source) return;
@@ -169,7 +188,11 @@ function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = f
   }
 
   const floating = drag ?? retreat;
-  return <>
+  const guide = assisted && !floating && highlight ? targets.find(({ id }) => id === highlight) : undefined;
+  const guidedProp = guide && props.find(({ id, stationary }) => id === guideItem && !stationary);
+  const landedTargets = Object.values(landings).map(({ destination }) => destination);
+
+  return <div className="station-arena" data-verified={verified || undefined}>
     <div className={"interaction-field " + name} ref={field}
       data-tap-ready={tapToPlace && Boolean(selected) || undefined}
       data-unassisted={!assisted || undefined}
@@ -178,56 +201,71 @@ function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = f
         if (event.key === "Escape") cancelSelection();
       }}>
       {children}
-      {props.map((prop) => (
-        <div key={prop.id} className="scene-prop"
-          role="img" aria-label={prop.label} aria-keyshortcuts={prop.stationary ? undefined : "Enter Space"}
-          tabIndex={prop.stationary ? undefined : 0}
-          data-scene-item={prop.id} data-location={prop.location} data-stationary={prop.stationary || undefined}
-          data-held={floating?.prop.id === prop.id ? true : undefined}
-          data-selected={selected?.prop.id === prop.id || undefined}
-          data-landed={landed.includes(prop.id) || undefined}
-          data-bumped={returned === prop.id || undefined}
-          data-coaxial={Boolean(prop.mounted) || undefined}
-          data-fitted={prop.fitted || undefined}
-          data-clamp={Boolean(prop.mounted?.clamp) || undefined}
-          style={{
-            left: (prop.x - (prop.mounted?.clamp ? prop.size * (prop.anchor?.[0] ?? 50) / 100 : 0)) + "%",
-            top: (prop.y - (prop.mounted?.clamp ? prop.mounted.clamp.height * (prop.anchor?.[1] ?? 50) / 100 : 0)) + "%",
-            width: prop.mounted || prop.fitted ? prop.size + "%" : "max(44px, " + prop.size + "%)",
-            "--prop-x": -(prop.anchor?.[0] ?? 50) + "%", "--prop-y": -(prop.anchor?.[1] ?? 50) + "%",
-            "--prop-angle": (prop.angle ?? 0) + "deg",
-            "--slide-x": (prop.mounted?.slide.x ?? 0) + "%",
-            "--slide-y": (prop.mounted?.slide.y ?? 0) + "%",
-            "--clamp-art-layer": prop.mounted?.clamp ? prop.layer : undefined,
-            zIndex: prop.mounted?.clamp ? undefined : prop.layer ?? 3,
-          } as CSSProperties}
-          onAnimationEnd={(event) => {
-            if (event.animationName !== "slide-on-bar" && event.animationName !== "settle-prop") return;
-            setLanded((ids) => ids.filter((id) => id !== prop.id));
-          }}
-          onPointerDown={(event) => pointerDown(event, prop)}
-          onPointerMove={pointerMove}
-          onPointerUp={(event) => pointerEnd(event, false)}
-          onPointerCancel={(event) => pointerEnd(event, true)}
-          onLostPointerCapture={(event) => pointerEnd(event, true)}
-          onKeyDown={(event) => {
-            if (event.key !== " " && event.key !== "Enter") return;
-            event.preventDefault();
-            select(prop, true);
-          }}>
-          {prop.mounted?.clamp ? (
-            <div className="mounted-art">
-              <img className="clamp-sprite" data-closed={prop.mounted.clamp.closed || undefined} src={prop.src} alt="" draggable={false} />
-            </div>
-          ) : <img className={prop.mounted ? "mounted-art" : undefined} src={prop.src} alt="" draggable={false} />}
-          {prop.caption && <span className="scene-prop-caption" aria-hidden="true">{prop.caption}</span>}
-        </div>
-      ))}
+      {guide && guidedProp && <PlacementGuide from={guidedProp} to={guide} />}
+      {props.map((prop) => {
+        const landing = landings[prop.id];
+        const landX = landing && field.current ? (landing.from.x - prop.x) * field.current.clientWidth / 100 : 0;
+        const landY = landing && field.current ? (landing.from.y - prop.y) * field.current.clientHeight / 100 : 0;
+        return (
+          <div key={prop.id} className="scene-prop"
+            role="img" aria-label={prop.label} aria-keyshortcuts={prop.stationary ? undefined : "Enter Space"}
+            tabIndex={prop.stationary ? undefined : 0}
+            data-scene-item={prop.id} data-location={prop.location} data-stationary={prop.stationary || undefined}
+            data-held={floating?.prop.id === prop.id ? true : undefined}
+            data-selected={selected?.prop.id === prop.id || undefined}
+            data-guided={guidedProp?.id === prop.id || undefined}
+            data-landed={Boolean(landing) || undefined}
+            data-bumped={returned === prop.id || undefined}
+            data-coaxial={Boolean(prop.mounted) || undefined}
+            data-fitted={prop.fitted || undefined}
+            data-clamp={Boolean(prop.mounted?.clamp) || undefined}
+            data-mat={prop.mat || undefined}
+            style={{
+              left: (prop.x - (prop.mounted?.clamp ? prop.size * (prop.anchor?.[0] ?? 50) / 100 : 0)) + "%",
+              top: (prop.y - (prop.mounted?.clamp ? prop.mounted.clamp.height * (prop.anchor?.[1] ?? 50) / 100 : 0)) + "%",
+              width: prop.mounted || prop.fitted ? prop.size + "%" : "max(44px, " + prop.size + "%)",
+              "--prop-x": -(prop.anchor?.[0] ?? 50) + "%", "--prop-y": -(prop.anchor?.[1] ?? 50) + "%",
+              "--prop-angle": (prop.angle ?? 0) + "deg",
+              "--slide-x": (prop.mounted?.slide.x ?? 0) + "%",
+              "--slide-y": (prop.mounted?.slide.y ?? 0) + "%",
+              "--land-x": landX + "px", "--land-y": landY + "px",
+              "--clamp-art-layer": prop.mounted?.clamp ? prop.layer : undefined,
+              zIndex: prop.mounted?.clamp ? undefined : prop.layer ?? 3,
+            } as CSSProperties}
+            onAnimationEnd={(event) => {
+              if (["slide-on-bar", "fly-to-slot", "unroll-mat"].includes(event.animationName)) clearLanding(prop.id);
+            }}
+            onPointerDown={(event) => pointerDown(event, prop)}
+            onPointerMove={pointerMove}
+            onPointerUp={(event) => pointerEnd(event, false)}
+            onPointerCancel={(event) => pointerEnd(event, true)}
+            onLostPointerCapture={(event) => pointerEnd(event, true)}
+            onKeyDown={(event) => {
+              if (event.key !== " " && event.key !== "Enter") return;
+              event.preventDefault();
+              select(prop, true);
+            }}>
+            {prop.mat ? <>
+              <span className="mat-sheet" style={{ backgroundImage: `url(${prop.src})` }} />
+              {landing && <img className="mat-flight" src={prop.dragSrc} alt="" draggable={false} />}
+            </> : prop.mounted?.clamp ? (
+              <div className="mounted-art">
+                <span className="clamp-motion" data-closed={prop.mounted.clamp.closed} style={{ backgroundImage: `url(${asset("bar-clamp")})` }}>
+                  <img className="clamp-sprite" src={prop.src} data-closed={prop.mounted.clamp.closed || undefined} alt="" draggable={false} />
+                </span>
+              </div>
+            ) : <img className={prop.mounted ? "mounted-art" : undefined} src={prop.src} alt="" draggable={false} />}
+            {prop.caption && <span className="scene-prop-caption" aria-hidden="true">{prop.caption}</span>}
+          </div>
+        );
+      })}
       {targets.map((target) => (
         <div key={target.id} className="scene-drop" role="button" tabIndex={0} aria-label={target.label}
           data-scene-target={target.id}
+          data-target-kind={target.kind}
           data-over={assisted && drag?.over === target.id || undefined}
           data-tip-target={highlight === target.id || undefined}
+          data-settled={assisted && target.id !== floorId && landedTargets.includes(target.id) || undefined}
           style={{
             left: target.x + "%", top: target.y + "%", width: target.width + "%", height: target.height + "%",
           }}
@@ -246,36 +284,48 @@ function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = f
         document.body,
       )}
     </div>
-    {assisted && !verified && <p className="interaction-cue" aria-live="polite">
-      <Icon name="info" size={15} />
+    {assisted && !verified && (prompt || selected) && <p className="interaction-cue" aria-live="polite">
+      <span className="cue-icon"><Icon name={selected?.keyboard ? "keyboard" : "touch"} size={20} /></span>
       {selected?.keyboard ? "Выбери место клавишей Tab и нажми пробел."
-        : selected ? "Коснись места, куда поставить предмет." : "Перетащи предмет на нужное место."}
+        : selected ? "Коснись места, куда поставить предмет." : prompt}
     </p>}
-  </>;
+    {footer}
+  </div>;
 }
 
+function PlacementGuide({ from, to }: { from: Point; to: Point }) {
+  const control = { x: from.x * .48 + to.x * .52, y: to.y + (from.y - to.y) * .22 };
+  const angle = Math.atan2(to.y - control.y, to.x - control.x) * 180 / Math.PI;
+  return <svg className="placement-guide" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+    <path d={`M ${from.x} ${from.y - 5} Q ${control.x} ${control.y} ${to.x} ${to.y}`} />
+    <path d="M 0 0 L -3.3 -2.1 L -2 0 L -3.3 2.1 Z" transform={`translate(${to.x} ${to.y}) rotate(${angle})`} />
+  </svg>;
+}
+
+const dumbbellRack = { left: 2, top: 3, width: 96, height: 87.3 };
+const rackedDumbbellScale = 1.15 * dumbbellRack.width / 100;
 const rackPockets = rackRows.flatMap((weights, shelf) => weights.map((weight, pair) => {
   const [first, second] = rackArt.shelves[shelf].slice(pair * 2, pair * 2 + 2);
-  const positions = [first[0], second[0]];
+  const positions = [first, second].map(([x, y]) => rackPoint(dumbbellRack, x / 100, y / 100));
   const target = rackTargets.find((spot) => spot.weightKg === weight);
-  return { weight, shelf, pair, positions, rest: first[1], x: (positions[0] + positions[1]) / 2, target };
+  return { weight, shelf, pair, positions, rest: positions[0].y, x: (positions[0].x + positions[1].x) / 2, target };
 }));
 
 const scatter = [
-  { x: 22, y: 65, size: 19, angle: -13 },
-  { x: 77, y: 86, size: 19, angle: 18 },
-  { x: 50, y: 69, size: 21, angle: 12 },
-  { x: 45, y: 88, size: 21, angle: -13 },
-  { x: 80, y: 63, size: 22, angle: 3 },
-  { x: 19, y: 84, size: 22, angle: 12 },
+  { x: 16, y: 63, size: 23.5, angle: -10 },
+  { x: 19.5, y: 81, size: 25, angle: 10 },
+  { x: 49, y: 69.5, size: 25.5, angle: -8 },
+  { x: 51, y: 89, size: 27.5, angle: 6 },
+  { x: 81, y: 63.6, size: 26, angle: 2 },
+  { x: 82, y: 82.8, size: 27, angle: -9 },
 ];
 
 const rackDropTargets = [
   ...[...rackPockets].sort((a, b) => Number(Boolean(b.target)) - Number(Boolean(a.target))).map(({ target, x, rest, shelf, pair }) =>
     ({ id: target?.id ?? `OCCUPIED_${shelf}_${pair}`,
       label: target?.label ?? `${shelf === 0 ? "Верхняя" : "Нижняя"} полка, пара ${pair + 1} (занято)`,
-      x, y: rest - 2.2, width: 19.7, height: 14.8 })),
-  { id: floorId, label: "На пол перед стойкой", x: 50, y: 79, width: 97, height: 42 },
+      x, y: rest - 1.8, width: 19.65, height: 12.4, kind: "rack" })),
+  { id: floorId, label: "На пол перед стойкой", x: 50, y: 77, width: 98, height: 45 },
 ];
 
 export function DumbbellScene({ station, progress, submit, coach }: Props & { station: Station; coach?: Coach }) {
@@ -291,8 +341,8 @@ export function DumbbellScene({ station, progress, submit, coach }: Props & { st
     const art = rackArt.parts[String(item.weightKg) as keyof typeof rackArt.parts];
     const dragSrc = asset("dumbbell-floor-" + item.weightKg);
     const position = spot ? {
-      x: spot.positions[pair.indexOf(item.id)], y: spot.rest,
-      size: art.width, anchor: [art.anchor[0], art.anchor[1]] as const,
+      ...spot.positions[pair.indexOf(item.id)],
+      size: art.width * rackedDumbbellScale, anchor: [art.anchor[0], art.anchor[1]] as const,
     } : scatter[index];
     return {
       ...position, id: item.id, label: item.label, location: assigned[item.id] ?? floorId,
@@ -327,23 +377,29 @@ export function DumbbellScene({ station, progress, submit, coach }: Props & { st
           item: asset("dumbbell-floor-" + hintItem.weightKg), destination: asset("dumbbell-rack-empty"),
         }} />} />}
       <InteractionField name="gym-floor" props={props} targets={rackDropTargets} highlight={coach?.line?.highlight} onDrop={place}
+        guideItem={hintItem?.id} prompt="Перетащи гантель на свободное место."
         onPick={coach ? (item) => { setPicked(item); coach.act(); } : undefined} tapToPlace assisted={Boolean(coach)}>
-        <img className="scene-backdrop" src={asset("dumbbell-rack-empty")} draggable={false}
+        <span className="gym-rack-shadow" aria-hidden="true" />
+        <img className="scene-backdrop" style={rackStyle(dumbbellRack)} src={asset("dumbbell-rack-empty")} draggable={false}
           alt="На верхней полке стоят пары 2, 4 и 6 кг. На нижней стоят пары 10 и 14 кг." />
-        {rackPockets.filter((pocket) => !pocket.target).flatMap(({ weight, positions, rest }) => {
+        {rackPockets.filter((pocket) => !pocket.target).flatMap(({ weight, positions }) => {
           const art = rackArt.parts[weight];
           return positions.map((position) => (
-            <img className="rack-fixed-dumbbell" key={weight + "-" + position} src={asset("rack-dumbbell-" + weight)} alt=""
-              draggable={false} style={{ left: position + "%", top: rest + "%", width: art.width + "%",
+            <img className="rack-fixed-dumbbell" key={weight + "-" + position.x} src={asset("rack-dumbbell-" + weight)} alt=""
+              draggable={false} style={{ left: position.x + "%", top: position.y + "%", width: art.width * rackedDumbbellScale + "%",
                 transform: `translate(${-art.anchor[0]}%, ${-art.anchor[1]}%)` }} />
           ));
         })}
         {rackPockets.map((pocket) => {
-          const paired = pocket.target && props.filter((prop) => prop.location === pocket.target?.id).length === 2;
+          const filled = pocket.target ? props.filter((prop) => prop.location === pocket.target?.id).length : 2;
+          const highlighted = pocket.target?.id === coach?.line?.highlight;
           return (
             <span className="rack-pair" data-shelf={pocket.shelf + 1} data-first-slot={pocket.pair * 2 + 1}
-              data-paired={Boolean(coach) && paired || undefined} data-vacant={Boolean(pocket.target) && !paired || undefined} aria-hidden="true" key={pocket.weight}
-              style={{ left: pocket.x + "%", top: pocket.rest + "%" }} />
+              data-paired={Boolean(coach && pocket.target) && filled === 2 || undefined}
+              data-vacant={Boolean(coach) && filled < 2 || undefined} data-guided={Boolean(highlighted && coach?.line?.highlight) || undefined}
+              aria-hidden="true" key={pocket.weight} style={{ left: pocket.x + "%", top: pocket.rest + "%" }}>
+              {[0, 1].map((index) => <i key={index} data-empty={index >= filled || undefined} />)}
+            </span>
           );
         })}
       </InteractionField>
@@ -351,36 +407,40 @@ export function DumbbellScene({ station, progress, submit, coach }: Props & { st
   );
 }
 
-const barbellTargets = [
-  { id: "LEFT", label: "Левая втулка грифа", ...onShaft(-.83), width: 31, height: 34 },
-  { id: "RIGHT", label: "Правая втулка грифа", ...onShaft(.83), width: 31, height: 34 },
-  { id: floorId, label: "Лоток для дисков и замков", x: 50, y: 75, width: 98, height: 49 },
-] as const;
+const shaftScale = 1.08;
+const barbellTargets: readonly Target[] = [
+  { id: "LEFT", label: "Левая втулка грифа", ...onShaft(-.83), width: 30, height: 36, kind: "sleeve" },
+  { id: "RIGHT", label: "Правая втулка грифа", ...onShaft(.83), width: 30, height: 36, kind: "sleeve" },
+  { id: floorId, label: "Место для дисков и замков на полу", x: 50, y: 77, width: 98, height: 46 },
+];
 
 const traySlots = [
   ["DISK_5_A", "DISK_5_B", "DISK_10_A", "DISK_20_A", "LOCK_A"],
   ["DISK_5_C", "DISK_5_D", "DISK_10_B", "DISK_20_B", "LOCK_B"],
 ] as const;
 const traySpots = Object.fromEntries(traySlots.flatMap((row, y) =>
-  row.map((id, x) => [id, { x: 12.4 + 18.8 * x, y: 67 + 20.5 * y }] as const),
+  row.map((id, x) => [id, { x: 12.4 + 18.8 * x, y: 65 + 22 * y }] as const),
 ));
 
-const stockSize = { 5: 9.5, 10: 11.3, 20: 13.6 };
+const stockSize = { 5: 11.4, 10: 13, 20: 14.9 };
 const diskDetails = {
   5: { asset: "bar-disk-5", thickness: .029, pulse: undefined },
   10: { asset: "bar-disk-10", thickness: .045, pulse: 13 },
   20: { asset: "bar-disk-20", thickness: .065, pulse: [40, 16, 22] },
 } as const;
 
-function onShaft(axial: number) {
-  return { x: 50 + barbellArt.axis[0] * axial, y: 26 + barbellArt.axis[1] * axial };
+function onShaft(axial: number, verified = false) {
+  return { x: 50 + barbellArt.axis[0] * shaftScale * axial,
+    y: (verified ? 45 : 27) + barbellArt.axis[1] * axial * (verified ? 1.84 : 1) };
 }
 
 export function BarbellScene({ progress, submit, coach, goal = barbell.targetKg }: Props & { coach?: Coach; goal?: number }) {
   const [resetCount, setResetCount] = useState(0);
   const assembly = progress.barbell;
   const layout = barbellLayout(assembly, goal);
-  const { totalKg, collarCount, disksReady } = layout;
+  const { totalKg, collarCount } = layout;
+  const prompt = !layout.disksReady ? "Перетащи диски на гриф."
+    : collarCount === 2 ? "Теперь можно проверить сборку." : "Закрепи диски замками.";
   const verified = progress.phase === "lesson";
   const check = checkBarbell(assembly, goal);
   const rule = coach?.active ?? (check.accepted ? {
@@ -388,6 +448,7 @@ export function BarbellScene({ progress, submit, coach, goal = barbell.targetKg 
     steps: ["Оба замка закрыты. Осталось проверить сборку.", "Внизу есть кнопка «Проверить».", "Нажми «Проверить»." ] as const,
   } : barbellRule(check.issue, layout));
   const mounts = new Map<string, { side: BarbellSide; axial: number; thickness: number }>();
+  let diskHeight = 0;
   for (const side of barbellSides) {
     const sign = side === "LEFT" ? -1 : 1;
     let end = .662;
@@ -396,6 +457,7 @@ export function BarbellScene({ progress, submit, coach, goal = barbell.targetKg 
       if (disk?.kind !== "disk") continue;
       const { thickness } = diskDetails[disk.weightKg];
       mounts.set(id, { side, axial: sign * (end + thickness / 2), thickness });
+      diskHeight = Math.max(diskHeight, barbellArt.parts[diskDetails[disk.weightKg].asset].height);
       end += thickness + .003;
     }
     const clamp = assembly.collars[side];
@@ -419,15 +481,14 @@ export function BarbellScene({ progress, submit, coach, goal = barbell.targetKg 
     const closed = Boolean(assembly.locked[mount.side]);
     const image = disk ? name : closed ? "bar-clamp-closed" : "bar-clamp-open";
     const end = onShaft(Math.sign(mount.axial) * (1.105 + mount.thickness / 2));
-    const position = onShaft(mount.axial);
-    if (verified) position.y += 13;
+    const position = onShaft(mount.axial, verified);
     return {
       ...position, id: prop.id, label: prop.label, src: asset(image), dragSrc, pulse, cue, location: mount.side,
       outermostId: disk && !assembly.collars[mount.side] ? assembly.disks[mount.side].at(-1) : undefined,
-      layer: 90 + Math.round(mount.axial * 70), size: art.width, anchor: [art.anchor[0], art.anchor[1]],
+      layer: 90 + Math.round(mount.axial * 70), size: art.width * shaftScale, anchor: [art.anchor[0], art.anchor[1]],
       mounted: {
         slide: { x: (end.x - position.x) / art.width * 100, y: (end.y - position.y) / art.height * 100 },
-        clamp: disk ? undefined : { height: art.height, closed },
+        clamp: disk ? undefined : { height: art.height * (verified ? 1.84 : 1), closed },
       },
     };
   });
@@ -457,7 +518,7 @@ export function BarbellScene({ progress, submit, coach, goal = barbell.targetKg 
     if (input.kind === "move-barbell" && input.item.startsWith("DISK_") && input.destination === floorId) resolved.push("barbell-inner-disk");
 
     const message = input.kind === "check-barbell" ? "Вес поровну. Оба замка зафиксированы."
-      : input.kind === "reset-barbell" ? "Гриф снова пустой. Диски и замки в лотке."
+      : input.kind === "reset-barbell" ? "Гриф снова пустой. Диски и замки на полу."
         : next.collarCount === 2 ? "Оба замка защёлкнуты. Можно проверить сборку."
           : next.collarCount === 1 ? "Один замок закрыт. Остался второй."
             : mounted === 2 ? "Замки на месте. Осталось закрыть рычажки."
@@ -470,6 +531,7 @@ export function BarbellScene({ progress, submit, coach, goal = barbell.targetKg 
   }
 
   const shaft = barbellArt.parts["bar-shaft"];
+  const shadowTop = onShaft(0, verified).y + (verified ? 1.84 : 1) * (diskHeight / 2 - 1.4);
   return (
     <div className="barbell-board">
       {coach && <CoachFeedback message={stationDetails.BARBELL.instruction} line={coach.line}
@@ -477,37 +539,31 @@ export function BarbellScene({ progress, submit, coach, goal = barbell.targetKg 
           item: asset(rule.id.includes("collar") || rule.id.endsWith("sleeve") ? "bar-tray-collar" : "bar-tray-20"),
           destination: asset("bar-shaft"),
         } : undefined} />} />}
-      <div className="barbell-mass">
+      <div className="barbell-mass" data-on-weight={totalKg === goal || undefined}>
         <div><span>Текущий вес</span><strong key={totalKg} data-current-weight={totalKg}
           data-verified={verified || undefined} aria-live="polite">{totalKg} кг</strong></div>
         <p>Цель <strong>{goal} кг</strong></p>
       </div>
       <InteractionField key={resetCount} name="barbell-table" props={verified ? props.filter((prop) => prop.location !== floorId) : props}
-        targets={verified ? [] : barbellTargets} verified={verified} assisted={Boolean(coach)}
+        targets={verified ? [] : barbellTargets} verified={verified} assisted={Boolean(coach)} prompt={prompt}
         onPick={coach?.act}
         onDrop={(prop, destination) => apply({ kind: "move-barbell", item: prop.id, destination: destination as BarbellDestination })}>
-        <span className="barbell-shadow" aria-hidden="true" />
+        <span className="barbell-shadow" style={{ top: shadowTop + "%" }} aria-hidden="true" />
         <img className="shaft-art" src={asset("bar-shaft")} alt="" draggable={false}
-          style={{ left: onShaft(0).x + "%", top: (onShaft(0).y + (verified ? 13 : 0)) + "%", width: shaft.width + "%",
+          style={{ left: onShaft(0).x + "%", top: onShaft(0, verified).y + "%", width: shaft.width * shaftScale + "%",
             transform: "translate(" + -shaft.anchor[0] + "%," + -shaft.anchor[1] + "%)" }} />
-        {verified
-          ? <div className="barbell-balance"><Icon name="check" size={17} /> {layout.leftKg} / {layout.rightKg} кг</div>
-          : <div className="barbell-tray" aria-hidden="true">
-            {["5 кг", "10 кг", "20 кг", "Замки"].map((label, index) =>
-              <span key={label} data-next={index === 3 && disksReady && coach?.active?.id === "barbell-missing-collar"
-                && (coach.line?.level ?? 0) >= 3 || undefined}>{label}</span>)}
-          </div>}
+        {verified && <div className="barbell-balance"><Icon name="check" size={17} /> {layout.leftKg} / {layout.rightKg} кг</div>}
         {barbellSides.map((side) => {
           const id = assembly.collars[side];
           const mount = id ? mounts.get(id) : undefined;
           if (!mount) return null;
-          const { x, y } = onShaft(mount.axial);
+          const { x, y } = onShaft(mount.axial, verified);
           const closed = Boolean(assembly.locked[side]);
           const sideLabel = side === "LEFT" ? "левый" : "правый";
           return (
             <SceneButton key={side} type="button" className="barbell-latch-action" aria-pressed={closed}
               aria-label={(closed ? "Открыть " : "Защёлкнуть ") + sideLabel + " замок"}
-              disabled={verified} style={{ left: x + "%", top: (y - 12.5 + (verified ? 13 : 0)) + "%" }}
+              disabled={verified} style={{ left: x + "%", top: (y - (verified ? 23 : 13)) + "%" }}
               onActivate={() => { if (apply({ kind: "toggle-collar", side }).accepted) playFeedback("collar"); }}>
               <span><Icon name={closed ? "lock" : "unlock"} size={14} /></span>
             </SceneButton>
@@ -519,12 +575,14 @@ export function BarbellScene({ progress, submit, coach, goal = barbell.targetKg 
           <span>Гриф весит {barbell.shaftKg} кг</span>
           {Object.keys(assembly.collars).length > 0 && <span><Icon name="lock" size={14} /> Замки {collarCount}/2</span>}
         </div>
-        <SceneButton type="button" className="button primary assembly-check" onActivate={() => apply({ kind: "check-barbell" })}>
-          Проверить <Icon name="check" size={18} />
-        </SceneButton>
-        <SceneButton type="button" className="button quiet assembly-reset" onActivate={() => {
-          if (apply({ kind: "reset-barbell" }).accepted) setResetCount((count) => count + 1);
-        }}><Icon name="rotate" size={17} /> Сбросить штангу</SceneButton>
+        <div className="assembly-actions">
+          <SceneButton type="button" className="button primary assembly-check" onActivate={() => apply({ kind: "check-barbell" })}>
+            Проверить <Icon name="check" size={19} />
+          </SceneButton>
+          <SceneButton type="button" className="button ghost assembly-reset" aria-label="Сбросить штангу" onActivate={() => {
+            if (apply({ kind: "reset-barbell" }).accepted) setResetCount((count) => count + 1);
+          }}><Icon name="rotate" size={20} /></SceneButton>
+        </div>
       </>}
     </div>
   );
@@ -538,8 +596,8 @@ type StorageZone = Omit<Target, "id" | "label"> & {
 };
 
 type RackFrame = { left: number; top: number; width: number; height: number };
-const plateRack = { left: 5, top: 8, width: 35, height: 45.5 };
-const storageRack = { left: 43, top: 8, width: 55, height: 45.5 };
+const plateRack = { left: 4.5, top: 5, width: 35.3, height: 50 };
+const storageRack = { left: 41, top: 5, width: 57.5, height: 50 };
 
 function rackPoint(frame: RackFrame, x: number, y: number): Point {
   return { x: frame.left + frame.width * x, y: frame.top + frame.height * y };
@@ -549,41 +607,40 @@ function rackStyle(frame: RackFrame): CSSProperties {
   return { left: frame.left + "%", top: frame.top + "%", width: frame.width + "%", height: frame.height + "%" };
 }
 
-function shelf(level: number, text: string, size: number): StorageZone {
+function shelf(level: number, text: string, size: number, stack = false): StorageZone {
   const { x, y } = rackPoint(storageRack, .41, level);
   return {
-    kind: "shelf", x, y: y - 2.7, width: 38, height: 10.8,
-    tag: { x, y: y + .8, text },
-    spots: [.25, .57].map((position) => ({
-      ...rackPoint(storageRack, position, level), size, anchor: [50, 95],
-    })),
+    kind: "shelf", x, y: y - 3.3, width: 39, height: 11.8,
+    tag: { x, y: y + 2.35, text },
+    spots: stack ? [0, 1].map((layer) => ({ x, y: y - .42 - layer * 1.13, size, anchor: [50, 83] }))
+      : [.25, .57].map((position) => ({ ...rackPoint(storageRack, position, level), size, anchor: [50, 95] })),
   };
 }
 
 // Centers of the exposed pegs in the original 244 × 440 rack cutout.
 const platePegs = [
-  [70, 59, 12.8], [187, 27, 13.6],
-  [70, 186, 14.2], [187, 149, 15],
-  [70, 295, 15.8],
+  [70, 59, 13.5], [187, 27, 14.3],
+  [70, 186, 15], [187, 149, 15.8],
+  [70, 295, 16.4],
 ] as const;
 
 const storage: Record<string, StorageZone> = {
-  MATS: shelf(.314, shelfLabels.MATS, 15.8),
-  BLOCKS: shelf(.581, shelfLabels.BLOCKS, 14.6),
-  ROLLERS: shelf(.852, shelfLabels.ROLLERS, 15),
+  MATS: shelf(.852, shelfLabels.MATS, 41.5, true),
+  BLOCKS: shelf(.581, shelfLabels.BLOCKS, 15.4),
+  ROLLERS: shelf(.314, shelfLabels.ROLLERS, 15.7),
   BANDS: {
-    kind: "hook", x: 92.2, y: 24.5, width: 14.8, height: 23,
-    tag: { x: 92, y: 16.1, text: shelfLabels.BANDS },
+    kind: "hook", x: 93, y: 21, width: 13.4, height: 15,
+    tag: { x: 92.1, y: 11.9, text: shelfLabels.BANDS },
     spots: [.846, .957].map((position) => ({
-      ...rackPoint(storageRack, position, .247), size: 4.7, anchor: [50, 8],
+      ...rackPoint(storageRack, position, .247), size: 5.5, anchor: [50, 8],
     })),
   },
   ...Object.fromEntries(inventoryPlateWeights.map((weight, index) => {
     const [x, y, size] = platePegs[index];
     const center = rackPoint(plateRack, x / 244, y / 440);
     return [plateRackSlot(weight), {
-      kind: "peg", ...center, width: 16.4, height: 10.8,
-      tag: { x: center.x, y: center.y + 5.6, text: weight + " кг" }, spots: [{ ...center, size }],
+      kind: "peg", ...center, width: 16.4, height: 11.9,
+      tag: { x: center.x, y: Math.max(2.3, center.y - 6.9), text: weight + " кг" }, spots: [{ ...center, size }],
     } satisfies StorageZone];
   })),
 };
@@ -598,12 +655,12 @@ const looseInventory: Record<string, StorageSpot> = {
   ROLLER_1: { x: 88, y: 79.6, angle: 6, size: 19.4 },
   ROLLER_2: { x: 38, y: 92.7, angle: -8, size: 19.4 },
   ...Object.fromEntries(inventoryPlateWeights.map((weight, index) => [
-    "PLATE_" + weight, { x: 11 + index * 19.5, y: 63.3, size: 15.2 + index * .52 },
+    "PLATE_" + weight, { x: 11 + index * 19.5, y: 63.5, size: 16.5 + index * .42 },
   ])),
 };
 
 const shelfMilestones: Partial<Record<string, string>> = {
-  MATS: "Коврики на месте.", BLOCKS: "Блоки на месте.", ROLLERS: "МФР-роллы на месте.", BANDS: "Резинки на месте.",
+  MATS: "Коврики лежат стопкой на нижней полке.", BLOCKS: "Блоки на месте.", ROLLERS: "МФР-роллы на месте.", BANDS: "Резинки на месте.",
 };
 
 export function InventoryScene({ station, progress, submit, coach }: Props & { station: Station; coach?: Coach }) {
@@ -621,10 +678,16 @@ export function InventoryScene({ station, progress, submit, coach }: Props & { s
     ?? needed.find((item) => item.id === picked) ?? needed[0];
   const props = station.items.map<Prop>((item) => {
     const zone = zones.find((zone) => zone.id === assigned[item.id]);
-    const position = zone ? zone.spots[zone.items.indexOf(item.id)] : looseInventory[item.id];
+    const order = zone?.items.indexOf(item.id) ?? 0;
+    const position = zone ? zone.spots[order] : looseInventory[item.id];
+    const floorAsset = inventoryAsset(item);
+    const mat = zone?.id === "MATS";
+    let src = floorAsset;
+    if (mat) src = asset(item.id === "MAT_2" ? "mat-unroll-teal" : "mat-unroll-coral");
+    if (zone?.kind === "hook") src = asset(item.id === "BAND_2" ? "inventory-band-hanging-coral" : "inventory-band-hanging");
     return {
       ...position, id: item.id, label: item.label, location: zone?.id ?? floorId,
-      src: zone?.kind === "hook" ? asset(item.id === "BAND_2" ? "inventory-band-hanging-coral" : "inventory-band-hanging") : inventoryAsset(item),
+      src, mat, dragSrc: floorAsset, layer: mat ? 5 + order : zone ? 4 : 3,
       caption: !zone && item.weightKg !== undefined ? item.weightKg + " кг" : undefined,
       cue: item.weightKg === undefined ? "storage" : "plate", fitted: Boolean(zone), stationary: Boolean(zone),
     };
@@ -642,7 +705,8 @@ export function InventoryScene({ station, progress, submit, coach }: Props & { s
     const next = Object.values(result.progress.placements.INVENTORY);
     const shelfFull = next.filter((slot) => slot === destination).length === 2;
     const milestone = next.length === station.items.length ? "Все предметы на месте."
-      : next.length === 1 ? "Да. Дальше можно ориентироваться по подписям на стойках."
+      : destination === "MATS" && !shelfFull ? "Коврик развернулся на нижней полке."
+        : next.length === 1 ? "Да. Дальше можно ориентироваться по подписям на стойках."
         : item.weightKg !== undefined && plates + 1 === inventoryPlateWeights.length ? "Все диски на стойке."
           : shelfFull ? shelfMilestones[destination]
             : undefined;
@@ -661,21 +725,38 @@ export function InventoryScene({ station, progress, submit, coach }: Props & { s
           item: inventoryAsset(hintItem), destination: asset(hintItem.weightKg ? "inventory-plate-rack" : "inventory-storage-rack"),
         }} />} />}
       <InteractionField name="storage-floor" props={props} targets={zones} highlight={coach?.line?.highlight} assisted={Boolean(coach)}
-        tapToPlace onDrop={place} onPick={coach ? (item) => { setPicked(item); coach.act(); } : undefined}>
+        guideItem={hintItem?.id} tapToPlace onDrop={place} onPick={coach ? (item) => { setPicked(item); coach.act(); } : undefined}
+        footer={coach && <div className="inventory-progress" aria-live="polite">
+          <InventoryMeter icon="disc" label="Диски" done={plates} count={inventoryPlateWeights.length} />
+          <InventoryMeter icon="cube" label="Инвентарь" done={stored.length - plates} count={station.items.length - inventoryPlateWeights.length} />
+        </div>}>
+        <span className="supply-rack-shadow" aria-hidden="true" />
         <img className="storage-rack plate-rack" style={rackStyle(plateRack)} src={asset("inventory-plate-rack")} draggable={false} alt="" />
         <img className="storage-rack supply-rack" style={rackStyle(storageRack)} src={asset("inventory-storage-rack")} draggable={false} alt="" />
-        {zones.map((zone) => (
-          <span className="storage-slot-label" key={zone.id} data-kind={zone.kind} data-zone={zone.id}
-            data-full={zone.items.length === zone.spots.length || undefined}
-            style={{ left: zone.tag.x + "%", top: zone.tag.y + "%" }}>{zone.tag.text}</span>
-        ))}
+        {zones.map((zone) => {
+          const full = zone.items.length === zone.spots.length;
+          return <div key={zone.id} className="storage-slot" aria-hidden="true">
+            {Boolean(coach) && zone.kind === "shelf" && <span className="shelf-light" data-full={full || undefined}
+              style={{ left: zone.x + "%", top: (zone.y + 2.5) + "%" }} />}
+            <span className="storage-slot-label" data-kind={zone.kind} data-zone={zone.id} data-full={full || undefined}
+              style={{ left: zone.tag.x + "%", top: zone.tag.y + "%" }}>{zone.tag.text}</span>
+          </div>;
+        })}
       </InteractionField>
-      {coach && <div className="inventory-progress" aria-live="polite">
-        <p><Icon name="gym" size={16} /> Диски <strong>{plates} / {inventoryPlateWeights.length}</strong></p>
-        <p><Icon name="storage" size={16} /> Инвентарь <strong>{stored.length - plates} / {station.items.length - inventoryPlateWeights.length}</strong></p>
-      </div>}
     </div>
   );
+}
+
+function InventoryMeter({ icon, label, done, count }: { icon: "disc" | "cube"; label: string; done: number; count: number }) {
+  return <div className="inventory-meter">
+    <Icon name={icon} size={25} />
+    <div>
+      <p>{label} <strong>{done} / {count}</strong></p>
+      <div className="meter-segments" aria-hidden="true">{Array.from({ length: count }, (_, index) =>
+        <i key={index} data-filled={index < done || undefined} />,
+      )}</div>
+    </div>
+  </div>;
 }
 
 export function SpatialStation(props: SpatialProps) {

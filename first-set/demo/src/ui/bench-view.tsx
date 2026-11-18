@@ -37,6 +37,27 @@ const controlsByPart = {
 } as const;
 const cushionNames = { backrest: "BackrestCushion", seat: "SeatCushion" } as const;
 
+function cushionOutline(geometry: THREE.BufferGeometry) {
+  geometry.computeBoundingBox();
+  const { min, max } = geometry.boundingBox!;
+  const inset = (max.z - min.z) * .055;
+  const radius = (max.z - min.z) * .165;
+  const limits = [min.x + inset, max.x - inset, min.z + inset, max.z - inset];
+  const [left, right, front, back] = limits;
+  const corners = [[right - radius, back - radius], [left + radius, back - radius],
+    [left + radius, front + radius], [right - radius, front + radius]];
+  const points = corners.flatMap(([x, z], corner) => Array.from({ length: 7 }, (_, step) => {
+    const angle = (corner + step / 6) * Math.PI / 2;
+    return new THREE.Vector3(x + radius * Math.cos(angle), max.y + inset * .1, z + radius * Math.sin(angle));
+  }));
+  points.push(points[0]);
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineDashedMaterial({
+    color: 0x11e3d7, dashSize: inset * 1.6, gapSize: inset * .9, toneMapped: false,
+  }));
+  line.computeLineDistances();
+  return line;
+}
+
 function disposeModel(model: THREE.Object3D) {
   const materials = new Set<THREE.MeshStandardMaterial>();
   const geometries = new Set<THREE.BufferGeometry>();
@@ -113,8 +134,8 @@ function createViewer(
 
   let model: THREE.Object3D | null = null;
   let mixer: THREE.AnimationMixer | null = null;
-  const ghostFill = new THREE.MeshBasicMaterial({ color: 0x00bcb9, transparent: true, opacity: .35, depthWrite: false });
-  const ghosts = new Map<BenchPart, { cushion: THREE.Mesh; shape: THREE.Mesh }>();
+  const ghostFill = new THREE.MeshBasicMaterial({ color: 0x16cdcb, transparent: true, opacity: .30, depthWrite: false, toneMapped: false });
+  const ghosts = new Map<BenchPart, { cushion: THREE.Mesh; shape: THREE.Group; outline: ReturnType<typeof cushionOutline> }>();
   let closed = false;
   let frame = 0;
   let width = 1;
@@ -152,7 +173,7 @@ function createViewer(
     width = Math.max(1, host.clientWidth);
     height = Math.max(1, host.clientHeight);
     const aspect = width / height;
-    const viewWidth = Math.max(1.74, aspect * 1.04);
+    const viewWidth = Math.max(1.65, aspect * 1.04);
     camera.left = -viewWidth / 2;
     camera.right = viewWidth / 2;
     camera.top = viewWidth / aspect / 2;
@@ -283,11 +304,13 @@ function createViewer(
     for (const part of benchParts) {
       const cushion = model.getObjectByName(cushionNames[part])?.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
       if (!cushion) continue;
-      const shape = new THREE.Mesh(cushion.geometry, ghostFill);
+      const shape = new THREE.Group();
+      const outline = cushionOutline(cushion.geometry);
+      shape.add(new THREE.Mesh(cushion.geometry, ghostFill), outline);
       shape.matrixAutoUpdate = false;
       shape.visible = false;
       scene.add(shape);
-      ghosts.set(part, { cushion, shape });
+      ghosts.set(part, { cushion, shape, outline });
     }
     setStatus("ready");
     schedule();
@@ -318,6 +341,10 @@ function createViewer(
         mixer?.stopAllAction();
         mixer?.uncacheRoot(model);
         disposeModel(model);
+      }
+      for (const { outline } of ghosts.values()) {
+        outline.geometry.dispose();
+        outline.material.dispose();
       }
       ghostFill.dispose();
       shadow.geometry.dispose();
@@ -527,7 +554,8 @@ export default function BenchView(props: Props) {
   }
 
   return (
-    <div ref={modelRoot} className="bench-view" data-model={status} data-unlocked={unlocked || undefined} data-aligned={aligned || undefined}
+    <div ref={modelRoot} className="bench-view" data-model={status} data-goal={props.target !== undefined && !props.paused || undefined}
+      data-unlocked={unlocked || undefined} data-aligned={aligned || undefined}
       tabIndex={0} aria-label={status === "failed" ? "Схема скамьи" : "Трёхмерная скамья"}
       aria-describedby={props.paused ? undefined : "bench-operation"}
       onPointerDown={(event) => {

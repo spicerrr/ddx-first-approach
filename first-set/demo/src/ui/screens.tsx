@@ -72,14 +72,15 @@ export function SceneResult({ heading, stage, next }: { heading: Heading; stage:
   if (stage === "BARBELL") {
     return (
       <section className="barbell-result" aria-labelledby="scene-result-title">
+        <CheckBurst />
         <h1 id="scene-result-title" tabIndex={-1} ref={heading}>{detail.lessonTitle}</h1>
         <ul aria-label="Проверка сборки">
-          {["80 кг", "Вес поровну", "2 замка"].map((item) =>
-            <li key={item}><Icon name="check" size={17} /> {item}</li>)}
+          {([["80 кг", "weight"], ["Вес поровну", "balance"], ["2 замка", "lock"]] as const).map(([label, icon]) =>
+            <li key={label}><span><Icon name="check" size={16} /></span>{label}<Icon name={icon} size={20} /></li>)}
         </ul>
         <div className="scene-result-tip">
-          <Icon name="info" size={17} />
-          <p><strong>Совет</strong> Собирать штангу удобнее парами, начиная с тяжёлых дисков.</p>
+          <Icon name="tip" size={23} />
+          <p>Собирать штангу удобнее парами, начиная с тяжёлых дисков.</p>
         </div>
         <SceneButton type="button" className="button primary" onActivate={next}>{detail.nextButton} <Icon name="arrow" /></SceneButton>
       </section>
