@@ -1,4 +1,4 @@
-import { useRef, useState, type Ref } from "react";
+import { useState, type Ref } from "react";
 import { asset, Icon } from "./graphics";
 import { SceneButton } from "./scene-button";
 import type { Training } from "./screens";
@@ -54,10 +54,10 @@ function ApproachCard({ begin }: { begin: () => void }) {
     <article className="onboarding-card" aria-labelledby="approach-title" id="club-approach">
       <img className="approach-photo" src={asset("coach-neutral")} alt="" fetchPriority="high" />
       <div className="approach-copy">
-        <h2 id="approach-title">Впервые<br />в зале?</h2>
-        <p>Попробуй оборудование перед первой тренировкой.</p>
+        <h2 id="approach-title">Первый подход</h2>
+        <p>Четыре задания со снарядами перед первым визитом в зал.</p>
         <SceneButton type="button" className="button primary" onActivate={begin}>
-          Открыть игру <Icon name="arrow" size={17} />
+          Открыть маршрут <Icon name="arrow" size={17} />
         </SceneButton>
       </div>
     </article>
@@ -97,7 +97,7 @@ function Week({ showAgenda }: { showAgenda: boolean }) {
   );
 }
 
-function TrainingShortcuts({ training, approach }: { training: TrainingLink; approach: () => void }) {
+function TrainingShortcuts({ training }: { training: TrainingLink }) {
   return (
     <div className="club-training-cards">
       <SceneButton type="button" className="club-training-card" onActivate={() => training("smart-start")}>
@@ -105,30 +105,16 @@ function TrainingShortcuts({ training, approach }: { training: TrainingLink; app
         <img src={asset("nav-mat")} alt="" />
         <Icon name="chevron" size={15} />
       </SceneButton>
-      <SceneButton type="button" className="club-training-card" onActivate={approach}>
-        <strong>Самостоятельные<br />тренировки</strong>
-        <img src={asset("nav-dumbbell-8")} alt="" />
-        <Icon name="chevron" size={15} />
-      </SceneButton>
     </div>
   );
 }
 
-export function Home({ heading, begin, training, calendar, startPoint }: {
+export function Home({ heading, training, calendar, startPoint }: {
   heading: Heading;
-  begin: () => void;
   training: TrainingLink;
   calendar: () => void;
   startPoint: () => void;
 }) {
-  const offer = useRef<HTMLDivElement>(null);
-
-  function focusOffer() {
-    const button = offer.current?.querySelector("button");
-    button?.focus({ preventScroll: true });
-    offer.current?.scrollIntoView({ block: "nearest" });
-  }
-
   return (
     <div className="club-home">
       <h1 className="sr-only" ref={heading} tabIndex={-1}>Главная DDX Fitness</h1>
@@ -137,13 +123,12 @@ export function Home({ heading, begin, training, calendar, startPoint }: {
           <img src={asset("nav-mat")} alt="" /><span>Smart Start</span>
         </SceneButton>
         <SceneButton type="button" className="club-story story-gym" onActivate={startPoint}>
-          <img src={asset("nav-dumbbell-12")} alt="" /><span>Первый визит<br />в зал</span>
+          <img src={asset("nav-dumbbell-12")} alt="" /><span>Точка старта</span>
         </SceneButton>
         <SceneButton type="button" className="club-story story-coach" onActivate={() => training("intro")}>
           <img src={asset("coach-neutral")} alt="" /><span>Тренировка<br />с тренером</span>
         </SceneButton>
       </section>
-      <div ref={offer}><ApproachCard begin={begin} /></div>
       <section className="club-calendar" aria-labelledby="home-calendar-title">
         <h2 id="home-calendar-title">
           <SceneButton type="button" className="club-section-link" onActivate={calendar}>
@@ -152,30 +137,27 @@ export function Home({ heading, begin, training, calendar, startPoint }: {
         </h2>
         <Week showAgenda={false} />
         <p className="club-calendar-note">Подбери тренировку</p>
-        <TrainingShortcuts training={training} approach={focusOffer} />
+        <TrainingShortcuts training={training} />
       </section>
     </div>
   );
 }
 
-export function ClubCalendar({ heading, training, approach }: { heading: Heading; training: TrainingLink; approach: () => void }) {
+export function ClubCalendar({ heading, training }: { heading: Heading; training: TrainingLink }) {
   return (
     <section className="club-subpage club-calendar">
       <h1 ref={heading} tabIndex={-1}>Мой календарь</h1>
       <Week showAgenda />
-      <TrainingShortcuts training={training} approach={approach} />
+      <TrainingShortcuts training={training} />
     </section>
   );
 }
 
-export function ClubAction({ heading, begin, training }: { heading: Heading; begin: () => void; training: TrainingLink }) {
+export function ClubAction({ heading }: { heading: Heading }) {
   return (
     <section className="club-subpage">
       <h1 ref={heading} tabIndex={-1}>Action</h1>
-      <ApproachCard begin={begin} />
-      <SceneButton type="button" className="button secondary" onActivate={() => training("smart-start")}>
-        Smart Start <Icon name="arrow" />
-      </SceneButton>
+      <p>Видеотренировки DDX Fitness.</p>
     </section>
   );
 }

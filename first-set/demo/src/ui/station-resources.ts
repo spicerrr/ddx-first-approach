@@ -1,17 +1,17 @@
-import type { StationId } from "../engine/scenario";
+import { barbell, inventoryPlateWeights, rackRows, rackTargets, type StationId } from "../engine/scenario";
 import { asset } from "./graphics";
 import { benchModel } from "./bench-resource";
 import { preloadBoard } from "./station-board";
 
 const art: Record<StationId, readonly string[]> = {
-  DUMBBELLS: ["dumbbell-rack-empty", ...[2, 4, 6, 8, 10, 12, 14, 16].map((weight) => "rack-dumbbell-" + weight),
-    ...[8, 12, 16].map((weight) => "dumbbell-floor-" + weight)],
+  DUMBBELLS: ["dumbbell-rack-empty", ...rackRows.flat().map((weight) => "rack-dumbbell-" + weight),
+    ...rackTargets.map(({ weightKg: weight }) => "dumbbell-floor-" + weight)],
   BARBELL: ["bar-shaft", "bar-tray-collar", "bar-clamp", "bar-clamp-open", "bar-clamp-closed",
-    ...[5, 10, 20].flatMap((weight) => ["bar-disk-" + weight, "bar-tray-" + weight])],
+    ...Array.from(new Set(barbell.props.flatMap((item) => item.kind === "disk" ? [item.weightKg] : []))).flatMap((weight) => ["bar-disk-" + weight, "bar-tray-" + weight])],
   BENCH: [],
   INVENTORY: ["inventory-plate-rack", "inventory-storage-rack", "inventory-band-hanging", "inventory-band-hanging-coral",
     "mat", "mat-teal", "mat-unroll-coral", "mat-unroll-teal", "band", "band-coral", "block", "block-light", "roller", "roller-teal",
-    ...[5, 10, 15, 20, 25].map((weight) => "inventory-plate-" + weight)],
+    ...inventoryPlateWeights.map((weight) => "inventory-plate-" + weight)],
 };
 
 const images = new Map<string, HTMLImageElement>();

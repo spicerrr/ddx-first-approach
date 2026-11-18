@@ -1,20 +1,18 @@
 import { checkBarbell, moveBarbell, newAssembly, toggleCollar, type BarbellAssembly, type BarbellDestination, type BarbellIssue } from "./barbell";
-import { benchGoals, benchNotches, benchParts, floorId, inventoryDestination, lastStation, rackTargets, stations, stationTotal,
-  type BarbellSide, type BenchNotch, type BenchPart, type Station, type StationId } from "./scenario";
+import { benchGoals, benchNotches, benchParts, floorId, inventoryLayout, lastStation, stations,
+  type BarbellSide, type BenchNotch, type BenchPart, type Station } from "./scenario";
+import { createInventoryInitialLayout } from "./inventory";
 
 export type Phase = "ready" | "playing" | "lesson" | "complete";
-export type GameEvent =
-  | { type: "game_session_started" | "game_session_completed"; at: string }
-  | { type: "game_stage_completed"; at: string; stage: StationId };
 
 export type Progress = {
   phase: Phase;
   stageIndex: number;
+  inventoryInitial: Readonly<Record<string, string>>;
   placements: Record<"DUMBBELLS" | "INVENTORY", Record<string, string>>;
   barbell: BarbellAssembly;
   benchPositions: Record<BenchPart, BenchNotch>;
   benchAdjustments: BenchPart[];
-  events: GameEvent[];
 };
 
 export type Action =
@@ -37,17 +35,22 @@ export function newProgress(): Progress {
   return {
     phase: "ready",
     stageIndex: 0,
+    inventoryInitial: {},
     placements: { DUMBBELLS: {}, INVENTORY: {} },
     barbell: newAssembly(),
-    benchPositions: { backrest: 0, seat: 0 },
+    benchPositions: { backrest: benchNotches[0], seat: benchNotches[0] },
     benchAdjustments: [],
-    events: [],
   };
 }
 
-export function start(progress: Progress, at = new Date().toISOString()): Progress {
+export function start(progress: Progress, rng = Math.random): Progress {
   if (progress.phase !== "ready") return progress;
-  return { ...progress, phase: "playing", events: [{ type: "game_session_started", at }] };
+  return {
+    ...progress,
+    phase: "playing",
+    inventoryInitial: stations[progress.stageIndex].stage === "INVENTORY"
+      ? createInventoryInitialLayout(rng) : progress.inventoryInitial,
+  };
 }
 
 export function completedStationCount(progress: Progress) {
@@ -63,7 +66,7 @@ export function restoreProgress(completed: number): Progress {
 export function stationProgress(progress: Progress, station: Station) {
   if (station.stage === "BENCH") return progress.benchAdjustments.length;
   if (station.stage === "BARBELL") {
-    return Number(progress.events.some((event) => event.type === "game_stage_completed" && event.stage === "BARBELL"));
+    return Number(completedStationCount(progress) > stations.findIndex(({ stage }) => stage === station.stage));
   }
   const placements = Object.values(progress.placements[station.stage]);
   if (station.stage === "DUMBBELLS") {
@@ -72,22 +75,27 @@ export function stationProgress(progress: Progress, station: Station) {
   return placements.length;
 }
 
+export function stationTotal(station: Station) {
+  if (station.stage === "BARBELL") return 1;
+  if (station.stage === "BENCH") return benchParts.length;
+  if (station.stage === "DUMBBELLS") return station.targets.length;
+  return station.items.length - inventoryLayout.platesPreplaced - inventoryLayout.distinctStorageZonesPreplaced;
+}
+
+export function inventoryPlacements(progress: Progress) {
+  return { ...progress.inventoryInitial, ...progress.placements.INVENTORY };
+}
+
 export function nextStation(progress: Progress): Progress {
   if (progress.phase !== "lesson") return progress;
-  return progress.stageIndex === lastStation
-    ? { ...progress, phase: "complete" }
-    : { ...progress, phase: "playing", stageIndex: progress.stageIndex + 1 };
+  return { ...progress, phase: "ready", stageIndex: progress.stageIndex + 1 };
 }
 
-function finishStation(progress: Progress, stage: StationId, at: string): Progress {
-  const events: GameEvent[] = [...progress.events, { type: "game_stage_completed", at, stage }];
-  if (progress.stageIndex === lastStation) events.push({ type: "game_session_completed", at });
-  return { ...progress, phase: "lesson", events };
+function finishStation(progress: Progress): Progress {
+  return { ...progress, phase: progress.stageIndex === lastStation ? "complete" : "lesson" };
 }
 
-type ExerciseGoals = { barbellKg?: number; bench?: Partial<Record<BenchPart, BenchNotch>> };
-
-export function submit(progress: Progress, action: Action, at = new Date().toISOString(), goals: ExerciseGoals = {}): Result {
+export function submit(progress: Progress, action: Action): Result {
   const reject = (message: string, issue?: BarbellIssue): Result => ({ progress, accepted: false, message, issue });
   const accept = (next: Progress, message: string): Result => ({ progress: next, accepted: true, message });
   const station = stations[progress.stageIndex];
@@ -96,8 +104,8 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
   if (progress.phase !== "playing" && !benchPractice) return reject("Продолжи прохождение со своего экрана.");
   if (action.kind === "check-barbell") {
     if (station.stage !== "BARBELL") return reject("Выбери действие текущей станции.");
-    const result = checkBarbell(progress.barbell, goals.barbellKg);
-    return result.accepted ? accept(finishStation(progress, "BARBELL", at), result.message) : reject(result.message, result.issue);
+    const result = checkBarbell(progress.barbell);
+    return result.accepted ? accept(finishStation(progress), result.message) : reject(result.message, result.issue);
   }
 
   if (action.kind === "reset-barbell") {
@@ -107,7 +115,7 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
 
   if (action.kind === "move-barbell") {
     if (station.stage !== "BARBELL") return reject("Выбери действие текущей станции.");
-    const result = moveBarbell(progress.barbell, action.item, action.destination, goals.barbellKg);
+    const result = moveBarbell(progress.barbell, action.item, action.destination);
     return result.accepted ? accept({ ...progress, barbell: result.assembly }, result.message) : reject(result.message, result.issue);
   }
 
@@ -127,12 +135,12 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
     const next = {
       ...progress,
       benchPositions: { ...progress.benchPositions, [action.part]: action.notch },
-      benchAdjustments: pending && action.notch === (goals.bench?.[pending] ?? benchGoals[pending])
+      benchAdjustments: pending && action.notch === benchGoals[pending]
         ? [...progress.benchAdjustments, pending]
         : progress.benchAdjustments,
     };
     const finished = pending && next.benchAdjustments.length === benchParts.length;
-    return accept(finished ? finishStation(next, "BENCH", at) : next, "");
+    return accept(finished ? finishStation(next) : next, "");
   }
 
   if (action.kind === "finish-bench") {
@@ -158,15 +166,16 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
       if (!Object.hasOwn(placements, item.id)) return reject("");
       delete assigned[item.id];
     } else {
-      const pocket = rackTargets.find(({ id }) => id === target.id);
-      if (pocket?.weightKg !== item.weightKg) {
+      if (target.id !== item.targetId) {
         return reject("Посмотри на соседние пары. Куда подойдёт этот вес, если ряд идёт от лёгких гантелей к тяжёлым?");
       }
       assigned[item.id] = target.id;
     }
   } else {
-    if (Object.hasOwn(placements, item.id)) return reject("Этот предмет уже на месте.");
-    const expected = inventoryDestination(item);
+    if (Object.hasOwn(progress.inventoryInitial, item.id) || Object.hasOwn(placements, item.id)) {
+      return reject("Этот предмет уже на месте.");
+    }
+    const expected = item.targetId;
     if (target?.id !== expected) {
       if (item.id.startsWith("PLATE_")) return reject(`На стойке у каждого веса своё место. Для этого диска подойдёт штырь с отметкой ${item.weightKg} кг.`);
       if (expected === "BANDS") return reject("Резинку можно повесить на крючки сбоку стеллажа.");
@@ -178,7 +187,7 @@ export function submit(progress: Progress, action: Action, at = new Date().toISO
 
   let updated = { ...progress, placements: { ...progress.placements, [action.stage]: assigned } };
   if (stationProgress(updated, station) === stationTotal(station)) {
-    updated = finishStation(updated, station.stage, at);
+    updated = finishStation(updated);
   }
   return accept(updated, "");
 }

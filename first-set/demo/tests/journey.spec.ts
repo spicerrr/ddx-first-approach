@@ -1,5 +1,5 @@
 import { test, expect, type Page, type TestInfo } from "@playwright/test";
-import { activate, adjustBench, begin, button, dragProp, dropTarget, keyboardBench, noOverflow, openBench, placements, prop, solveChallenge } from "./controls";
+import { activate, adjustBench, begin, button, dragProp, dropTarget, enterInventory, keyboardBench, looseInventory, noOverflow, openBench, openRoute, placements, prop } from "./controls";
 
 const oldStorageKey = "first-approach-interactive-v3";
 const score = (page: Page, done: number, all: number) => page.getByLabel("Выполнено " + done + " из " + all, { exact: true });
@@ -18,7 +18,10 @@ test("четыре станции, перетаскивание снарядов
   page.on("requestfailed", (request) => problems.push(request.failure()?.errorText + " " + request.url()));
   await page.addInitScript(() => {
     const pulses: (number | number[])[] = [];
+    const events: unknown[] = [];
     Object.defineProperty(window, "__scenePulses", { value: pulses });
+    Object.defineProperty(window, "__approachEvents", { value: events });
+    window.addEventListener("first-approach-analytics", (event) => events.push((event as CustomEvent).detail));
     Object.defineProperty(navigator, "vibrate", { value: (pattern: number | number[]) => { pulses.push(pattern); return true; } });
   });
   const press = (name: string) => activate(page, name, isMobile);
@@ -29,30 +32,40 @@ test("четыре станции, перетаскивание снарядов
   const itemsOnFloor = page.locator(".gym-floor [data-location='FLOOR']");
 
   await page.goto("");
-  await expect(button(page, "Открыть игру")).toBeVisible();
+  await expect(button(page, "Точка старта")).toBeVisible();
+  await expect(button(page, "Открыть маршрут")).toHaveCount(0);
   const clubNavigation = page.getByRole("navigation", { name: "Разделы DDX Fitness" });
   await expect(clubNavigation.getByRole("button", { name: "Главная" })).toHaveAttribute("aria-current", "page");
-  await expect(page.locator("#club-approach").getByRole("button", { name: "Открыть игру" })).toHaveCSS("background-color", "rgb(255, 106, 77)");
   await capture(page, info, "01-home");
   await press("Календарь");
   await expect(page.getByRole("heading", { name: "Мой календарь", level: 1 })).toBeVisible();
+  await expect(button(page, "Открыть маршрут")).toHaveCount(0);
   await press("Action");
-  await press("Открыть игру");
-  await press("Выйти");
   await expect(page.getByRole("heading", { name: "Action", level: 1 })).toBeVisible();
+  await expect(button(page, "Открыть маршрут")).toHaveCount(0);
   await press("Главная");
-  await press("Smart Start");
-  await expect(page.getByRole("heading", { name: "Smart Start", exact: true })).toBeVisible();
+  await press("Точка старта");
+  await expect(page.getByRole("heading", { name: "Точка старта" })).toBeVisible();
+  await expect(page.locator("#club-approach").getByRole("heading")).toHaveText("Первый подход");
+  await press("Занятия с тренером");
+  const trainingLink = page.getByRole("link").first();
+  await expect(trainingLink).toHaveAttribute("href", "https://www.ddxfitness.ru/group-training/3076/");
+  await trainingLink.evaluate((node) => node.addEventListener("click", (event) => event.preventDefault(), { once: true }));
+  await trainingLink.click();
   await press("Назад");
-  await press("Открыть игру");
-  await expect(page.locator(".intro-cover img")).toHaveAttribute("src", /coach-greeting\.webp$/);
-  await capture(page, info, "01a-cover");
-  await press("Начать игру");
+  await capture(page, info, "01a-start-point");
+  await press("Открыть маршрут");
+  await press("Выйти");
+  const exitBeforeStart = page.getByRole("dialog", { name: "Выйти из «Первого подхода»?" }).getByRole("button", { name: "Выйти", exact: true });
+  if (isMobile) await exitBeforeStart.tap();
+  else await exitBeforeStart.click();
+  await press("Открыть маршрут");
   await expect(page.getByRole("heading", { name: "Маршрут" })).toBeVisible();
   await expect(page.locator('.route-stations [data-progress="locked"]')).toHaveCount(3);
   await capture(page, info, "02a-route");
   await press("Начать");
   await expect(itemsOnFloor).toHaveCount(6);
+  await expect(status).toContainText("На полу три пары гантелей. Верни их на стойку.");
   await expect(avatar.locator("img")).toHaveAttribute("src", /coach-neutral\.webp$/);
   const initialAvatar = await avatarSize();
   expect(initialAvatar[0]).toBeGreaterThanOrEqual(68);
@@ -86,6 +99,7 @@ test("четыре станции, перетаскивание снарядов
   await press("К штанге");
   await press("К станции");
   await expect(weight(page)).toHaveText("20 кг");
+  await expect(status).toContainText("Собери штангу весом 80 кг. Гриф весит 20 кг. Когда закончишь — проверь сборку.");
   await expect(page.locator(".barbell-table [data-coaxial]")).toHaveCount(0);
   await expect(page.locator(".barbell-table [data-location='FLOOR']")).toHaveCount(10);
   await expect(page.getByRole("list", { name: "Порядок сборки" })).toHaveCount(0);
@@ -173,7 +187,9 @@ test("четыре станции, перетаскивание снарядов
   await press("К станции");
   await openBench(page);
   await expect(status).toContainText("Тренер");
-  const benchCue = page.locator("#bench-operation");
+  const benchCue = page.locator(".bench-cue-rest");
+  await expect(benchCue).toContainText("Попробуй сдвинуть подушку");
+  await expect(benchCue).not.toContainText(/фиксатор/i);
   await expect(benchCue).not.toContainText(/Space|пробел/i);
   await expect(page.locator(".bench-station")).toHaveAttribute("data-input", isMobile ? "touch" : "mouse");
   await expect(page.locator(".bench-view img")).toHaveCount(0);
@@ -213,13 +229,15 @@ test("четыре станции, перетаскивание снарядов
   await expect(score(page, 2, 2)).toBeVisible();
   await expect(page.locator(".bench-station")).toHaveAttribute("data-sandbox", "true");
   await press("К инвентарю");
-  await press("К станции");
-  await expect(score(page, 0, 13)).toBeVisible();
-  await expect(page.locator(".storage-floor [data-location='FLOOR']")).toHaveCount(13);
+  await enterInventory(page, isMobile, .99);
+  const remaining = page.locator(".inventory-score");
+  await expect(remaining).toHaveText("Осталось 8");
+  await expect(page.locator(".storage-floor [data-location='FLOOR']")).toHaveCount(8);
+  await expect(page.locator(".storage-floor [data-stationary]")).toHaveCount(5);
   await expect(page.locator(".plate-rack")).toHaveAttribute("src", /inventory-plate-rack\.webp$/);
   const rack = page.locator(".supply-rack");
   await expect(rack).toHaveAttribute("src", /inventory-storage-rack\.webp$/);
-  await expect(page.locator(".storage-floor [data-location='FLOOR'] .scene-prop-caption")).toHaveCount(5);
+  await expect(page.locator(".storage-floor [data-location='FLOOR'] .scene-prop-caption")).toHaveCount(3);
   await expect(page.locator('.storage-slot-label[data-kind="shelf"]')).toHaveCount(3);
   await capture(page, info, "08-inventory");
   await move(["MAT_1", "BANDS"]);
@@ -227,26 +245,24 @@ test("четыре станции, перетаскивание снарядов
   await move(["PLATE_5", "PLATES_10"]);
   await expect(status).toContainText("Для дисков есть отдельная стойка");
   await expect(prop(page, "PLATE_5")).toHaveAttribute("data-location", "FLOOR");
+  await expect(remaining).toHaveText("Осталось 8");
   await move(["PLATE_5", "PLATES_5"]);
   await expect(prop(page, "PLATE_5")).toHaveAttribute("data-location", "PLATES_5");
-  await expect(page.locator('.storage-slot-label[data-zone="PLATES_5"]')).toHaveCount(1);
+  await expect(remaining).toHaveText("Осталось 7");
   await expect(status).toContainText("ориентироваться по подписям на стойках");
-  await move(["BAND_1", "BANDS"]);
-  const firstBand = prop(page, "BAND_1");
-  await expect(firstBand.locator("img")).toHaveAttribute("src", /inventory-band-hanging\.webp$/);
-  const shelfBounds = (await rack.boundingBox())!;
-  const mountedBounds = (await firstBand.boundingBox())!;
-  expect(mountedBounds.x).toBeGreaterThan(shelfBounds.x + shelfBounds.width * .78);
-  await expect(status).toContainText("ориентироваться по подписям на стойках");
-  await capture(page, info, "08a-inventory-mounted");
-  const secondBand = prop(page, "BAND_2");
-  if (isMobile) await secondBand.tap();
-  else await secondBand.click();
-  await expect(secondBand).toHaveAttribute("data-selected", "true");
+
+  const band = prop(page, "BAND_1");
+  if (isMobile) await band.tap();
+  else await band.click();
+  await expect(band).toHaveAttribute("data-selected", "true");
   if (isMobile) await dropTarget(page, "BANDS").tap();
   else await dropTarget(page, "BANDS").click();
-  await expect(secondBand).toHaveAttribute("data-location", "BANDS");
+  await expect(band.locator("img")).toHaveAttribute("src", /inventory-band-hanging\.webp$/);
+  const shelfBounds = (await rack.boundingBox())!;
+  const mountedBounds = (await band.boundingBox())!;
+  expect(mountedBounds.x).toBeGreaterThan(shelfBounds.x + shelfBounds.width * .78);
   await expect(status).toContainText("Резинки на месте.");
+  await capture(page, info, "08a-inventory-mounted");
 
   const mat = prop(page, "MAT_2");
   const matShelf = dropTarget(page, "MATS");
@@ -271,25 +287,31 @@ test("четыре станции, перетаскивание снарядов
   await expect(topMat).toHaveCSS("z-index", "6");
   await expect(status).toContainText("Коврики лежат стопкой на нижней полке.");
 
-  const completedEarly = ["BAND_1", "BAND_2", "PLATE_5", "MAT_1", "MAT_2", "ROLLER_2"];
-  for (const pair of placements.inventory) {
-    if (!completedEarly.includes(pair[0])) await move(pair);
-  }
-  await expect(score(page, 12, 13)).toBeVisible();
+  const pending = await looseInventory(page);
+  for (const pair of pending.slice(0, -1)) await move(pair);
+  await expect(remaining).toHaveText("Осталось 1");
   await capture(page, info, "08b-stocked-rack");
-  await move(["ROLLER_2", "ROLLERS"]);
+  await move(pending.at(-1)!);
+  await expect(remaining).toHaveText("Всё на месте");
+  await expect(status).toContainText("Готово. Инвентарь на местах, проход свободен.");
 
-  await expect(page.getByRole("region", { name: "Проход свободен" })).toBeVisible();
-  await press("К контрольной ситуации");
-  await press("К проверке");
-  await expect(page.getByRole("heading", { name: "Теперь без подсказок" })).toBeVisible();
-  await expect(page.locator(".coach-message, [data-tip-target]")).toHaveCount(0);
-  await solveChallenge(page, isMobile);
-  await press("К итогам");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Первый подход пройден");
   await expect(page.getByRole("list", { name: "Пройденные станции" }).getByRole("listitem")).toHaveCount(4);
   await expect(page.locator(".finish-medal img")).toHaveAttribute("src", /finish-medal\.webp$/);
-  await expect(page.locator(".finish-challenge")).toContainText("Контрольная ситуация — без подсказок");
+  await expect(page.locator(".finish-next")).toContainText("Для конкретных тренажёров");
+  const events = await page.evaluate(() => (window as Window & {
+    __approachEvents: Array<{ eventType: string; stage?: string; schemaVersion: string; scenarioVersion: string; source?: string; training?: string }>;
+  }).__approachEvents);
+  const kinds = (type: string) => events.filter(({ eventType }) => eventType === type);
+  for (const suffix of ["started", "completed"]) {
+    expect(kinds("first_approach_stage_" + suffix).map(({ stage }) => stage)).toEqual(["DUMBBELLS", "BARBELL", "BENCH", "INVENTORY"]);
+    expect(kinds("first_approach_" + suffix)).toHaveLength(1);
+  }
+  expect(kinds("first_approach_exposed").length).toBeGreaterThan(0);
+  expect(kinds("first_approach_skipped")).toHaveLength(1);
+  expect(kinds("training_cta_clicked")).toEqual([expect.objectContaining({ source: "start-point", training: "intro" })]);
+  expect(kinds("first_approach_hint_level_reached").length).toBeGreaterThan(0);
+  expect(events.every((event) => event.schemaVersion === "2" && event.scenarioVersion === "2.0")).toBe(true);
   await capture(page, info, "09-finish");
   await press("Занятия с тренером");
   await expect(page.getByRole("link").first()).toHaveAttribute("href", "https://www.ddxfitness.ru/group-training/3076/");
@@ -330,9 +352,9 @@ test("выход сохраняет только завершённые стан
   const confirm = exit.getByRole("button", { name: "Выйти", exact: true });
   if (isMobile) await confirm.tap();
   else await confirm.click();
-  await expect(button(page, "Открыть игру")).toBeVisible();
+  await expect(button(page, "Открыть маршрут")).toBeVisible();
   await page.reload();
-  await press("Открыть игру");
+  await openRoute(page, isMobile);
   await expect(page.locator('.route-stations [data-progress="done"]')).toHaveCount(1);
   await expect(page.locator('.route-stations [aria-current="step"]')).toContainText("Штанга");
   await press("К станции");

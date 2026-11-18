@@ -1,0 +1,246 @@
+{
+  "version": "2.0",
+  "stages": [
+    {
+      "stage": "DUMBBELLS",
+      "title": "Гантели",
+      "rackRows": [
+        [
+          {
+            "weightKg": 2
+          },
+          {
+            "weightKg": 4
+          },
+          {
+            "weightKg": 6
+          },
+          {
+            "weightKg": 8,
+            "targetId": "RACK_8"
+          }
+        ],
+        [
+          {
+            "weightKg": 10
+          },
+          {
+            "weightKg": 12,
+            "targetId": "RACK_12"
+          },
+          {
+            "weightKg": 14
+          },
+          {
+            "weightKg": 16,
+            "targetId": "RACK_16"
+          }
+        ]
+      ],
+      "items": [
+        {
+          "id": "DB_8_A",
+          "targetId": "RACK_8"
+        },
+        {
+          "id": "DB_8_B",
+          "targetId": "RACK_8"
+        },
+        {
+          "id": "DB_12_A",
+          "targetId": "RACK_12"
+        },
+        {
+          "id": "DB_12_B",
+          "targetId": "RACK_12"
+        },
+        {
+          "id": "DB_16_A",
+          "targetId": "RACK_16"
+        },
+        {
+          "id": "DB_16_B",
+          "targetId": "RACK_16"
+        }
+      ]
+    },
+    {
+      "stage": "BARBELL",
+      "title": "Штанга",
+      "shaftKg": 20,
+      "sides": [
+        "LEFT",
+        "RIGHT"
+      ],
+      "completion": {
+        "targetKg": 80,
+        "sideDifferenceKg": 0,
+        "closedCollars": 2
+      },
+      "items": [
+        {
+          "id": "DISK_20_A",
+          "kind": "disk",
+          "weightKg": 20
+        },
+        {
+          "id": "DISK_20_B",
+          "kind": "disk",
+          "weightKg": 20
+        },
+        {
+          "id": "DISK_5_A",
+          "kind": "disk",
+          "weightKg": 5
+        },
+        {
+          "id": "DISK_5_B",
+          "kind": "disk",
+          "weightKg": 5
+        },
+        {
+          "id": "DISK_5_C",
+          "kind": "disk",
+          "weightKg": 5
+        },
+        {
+          "id": "DISK_5_D",
+          "kind": "disk",
+          "weightKg": 5
+        },
+        {
+          "id": "DISK_10_A",
+          "kind": "disk",
+          "weightKg": 10
+        },
+        {
+          "id": "DISK_10_B",
+          "kind": "disk",
+          "weightKg": 10
+        },
+        {
+          "id": "LOCK_A",
+          "kind": "collar"
+        },
+        {
+          "id": "LOCK_B",
+          "kind": "collar"
+        }
+      ]
+    },
+    {
+      "stage": "BENCH",
+      "title": "Скамья",
+      "notches": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "parts": [
+        {
+          "id": "backrest",
+          "targetNotch": 2
+        },
+        {
+          "id": "seat",
+          "targetNotch": 1
+        }
+      ]
+    },
+    {
+      "stage": "INVENTORY",
+      "title": "Инвентарь",
+      "shelvesAndHooks": [
+        {
+          "id": "MATS",
+          "label": "Нижняя полка для ковриков"
+        },
+        {
+          "id": "BLOCKS",
+          "label": "Средняя полка для блоков"
+        },
+        {
+          "id": "BANDS",
+          "label": "Боковые крючки для резинок"
+        },
+        {
+          "id": "ROLLERS",
+          "label": "Верхняя полка для роллов"
+        }
+      ],
+      "items": [
+        {
+          "id": "PLATE_5",
+          "weightKg": 5,
+          "targetId": "PLATES_5"
+        },
+        {
+          "id": "PLATE_10",
+          "weightKg": 10,
+          "targetId": "PLATES_10"
+        },
+        {
+          "id": "PLATE_15",
+          "weightKg": 15,
+          "targetId": "PLATES_15"
+        },
+        {
+          "id": "PLATE_20",
+          "weightKg": 20,
+          "targetId": "PLATES_20"
+        },
+        {
+          "id": "PLATE_25",
+          "weightKg": 25,
+          "targetId": "PLATES_25"
+        },
+        {
+          "id": "MAT_1",
+          "label": "Коврик",
+          "targetId": "MATS"
+        },
+        {
+          "id": "MAT_2",
+          "label": "Бирюзовый коврик",
+          "targetId": "MATS"
+        },
+        {
+          "id": "BLOCK_1",
+          "label": "Блок",
+          "targetId": "BLOCKS"
+        },
+        {
+          "id": "BLOCK_2",
+          "label": "Светлый блок",
+          "targetId": "BLOCKS"
+        },
+        {
+          "id": "BAND_1",
+          "label": "Резиновая петля",
+          "targetId": "BANDS"
+        },
+        {
+          "id": "BAND_2",
+          "label": "Коралловая резиновая петля",
+          "targetId": "BANDS"
+        },
+        {
+          "id": "ROLLER_1",
+          "label": "МФР-ролл",
+          "targetId": "ROLLERS"
+        },
+        {
+          "id": "ROLLER_2",
+          "label": "Бирюзовый МФР-ролл",
+          "targetId": "ROLLERS"
+        }
+      ],
+      "initialLayout": {
+        "platesPreplaced": 2,
+        "distinctStorageZonesPreplaced": 3,
+        "minLoosePerStorageZone": 1
+      }
+    }
+  ]
+}

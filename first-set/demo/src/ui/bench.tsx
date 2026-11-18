@@ -35,12 +35,11 @@ const controls = {
   mouse: ["Удерживай фиксатор.", "Не отпуская кнопку, веди мышь к контуру.", "Отпусти кнопку мыши."],
 };
 
-export function BenchStation({ progress, submit, inputMode, coach, onLocked }: {
+export function BenchStation({ progress, submit, inputMode, coach }: {
   progress: Progress;
   submit: (action: Action) => Result;
   inputMode: InputMode;
-  coach?: Coach;
-  onLocked?: () => void;
+  coach: Coach;
 }) {
   const pending = benchParts.find((item) => !progress.benchAdjustments.includes(item));
   const complete = pending === undefined;
@@ -51,10 +50,13 @@ export function BenchStation({ progress, submit, inputMode, coach, onLocked }: {
   const otherPart = part === "backrest" ? "seat" : "backrest";
   const solved = progress.benchAdjustments.includes(part);
   const waitingForNext = solved && !complete;
-  const target = solved || !coach ? undefined : benchGoals[part];
+  const target = solved ? undefined : benchGoals[part];
   const lockedRule = benchRule(part, "locked");
   const alignmentRule = benchRule(part, "alignment");
-  const latchHint = coach?.active?.id === lockedRule.id;
+  const latchHint = coach.active?.id === lockedRule.id;
+  const latchProgress = coach.rules[lockedRule.id];
+  const showControls = Boolean(latchProgress?.demoOpened || (latchProgress?.hintLevel ?? 0) >= 2
+    || coach.rules[alignmentRule.id]?.hintLevel);
   const [hold, move, release] = controls[inputMode];
   const controlIcon = inputMode === "keyboard" ? "keyboard" : inputMode === "touch" ? "touch" : "mouse";
 
@@ -69,12 +71,12 @@ export function BenchStation({ progress, submit, inputMode, coach, onLocked }: {
     setPart(nextPart);
     setShowDemo(false);
     setCelebrated(undefined);
-    if (!complete) coach?.say(exercises[nextPart].task);
+    if (!complete) coach.say(exercises[nextPart].task);
   }
 
   function adjust(notch: BenchNotch) {
     const result = submit({ kind: "bench-adjustment", part, notch });
-    if (target === undefined || !coach) return;
+    if (target === undefined) return;
     if (!result.progress.benchAdjustments.includes(part)) {
       coach.mistake(alignmentRule);
       return;
@@ -85,7 +87,6 @@ export function BenchStation({ progress, submit, inputMode, coach, onLocked }: {
   }
 
   function toggleDemo() {
-    if (!coach) return;
     if (!showDemo) coach.demo(coach.active ?? lockedRule);
     else coach.act();
     setShowDemo(!showDemo);
@@ -93,22 +94,21 @@ export function BenchStation({ progress, submit, inputMode, coach, onLocked }: {
 
   return (
     <section className="bench-station" data-bench-part={part} data-input={inputMode} data-sandbox={complete || undefined}>
-      {coach && <CoachFeedback message={complete ? "Скамья настроена: спинка и сиденье зафиксированы." : exercise.task}
-        line={coach.line} controls={!waitingForNext && <AssistControls coach={coach} rule={coach.active ?? lockedRule} demo={() => setShowDemo(true)} />} />}
+      <CoachFeedback message={complete ? "Скамья настроена: спинка и сиденье зафиксированы." : exercise.task}
+        line={coach.line} controls={!waitingForNext && <AssistControls coach={coach} rule={coach.active ?? lockedRule} demo={() => setShowDemo(true)} />} />
       <div className="bench-workshop station-arena">
         <div className="bench-scene">
-          {coach && <div className="bench-hud" aria-hidden="true">
+          <div className="bench-hud" aria-hidden="true">
             <span className="bench-hud-rest">{exercise.title}</span>
             <span className="bench-hud-open"><Icon name="unlock" size={15} /> Фиксатор отведён</span>
             <span className="bench-hud-ready"><Icon name="check" size={15} /> Положение совпало</span>
-          </div>}
+          </div>
           <div inert={showDemo}>
             <Suspense fallback={<div className="bench-view"><p className="bench-status" role="status">Загружается 3D-модель…</p></div>}>
               <BenchView part={part} pose={pose} notch={progress.benchPositions[part]} inputMode={inputMode}
                 target={target} paused={waitingForNext || showDemo} highlightLatch={latchHint}
-                onAdjust={adjust} onManipulate={coach?.act} onLockedAttempt={() => {
-                  if (!complete) coach?.mistake(lockedRule);
-                  onLocked?.();
+                onAdjust={adjust} onManipulate={coach.act} onLockedAttempt={() => {
+                  if (!complete) coach.mistake(lockedRule);
                 }} />
             </Suspense>
           </div>
@@ -123,32 +123,34 @@ export function BenchStation({ progress, submit, inputMode, coach, onLocked }: {
           </figure>
           {celebrated === part && !showDemo && <CheckBurst className="bench-achievement" label={complete ? "Скамья настроена" : "Спинка настроена"} />}
         </div>
-        {coach && !waitingForNext && (
+        {!waitingForNext && (
           <p className="bench-cue" id="bench-operation" aria-live="polite">
             <span className="bench-cue-rest">
               <span className="bench-cue-step"><span className="cue-icon"><Icon name={controlIcon} size={20} /></span>
-                {complete ? "Поверни модель, чтобы рассмотреть скамью." : hold}</span>
-              {!complete && <><Icon name="arrow" size={18} />
+                {complete ? "Поверни модель, чтобы рассмотреть скамью."
+                  : showControls ? hold
+                    : inputMode === "keyboard" ? "Попробуй изменить положение стрелками." : "Попробуй сдвинуть подушку на модели."}</span>
+              {!complete && showControls && <><Icon name="arrow" size={18} />
                 <span className="bench-cue-step"><span className="cue-icon"><Icon name={controlIcon} size={20} /></span>{move}</span></>}
             </span>
             <span className="bench-cue-move"><span className="cue-icon"><Icon name={controlIcon} size={20} /></span>{move}</span>
             <span className="bench-cue-snap"><span className="cue-icon"><Icon name="check" size={20} /></span>{release}</span>
           </p>
         )}
-        {coach && <SceneButton type="button" className="button quiet bench-help" onActivate={toggleDemo}
+        <SceneButton type="button" className="button quiet bench-help" onActivate={toggleDemo}
           data-suggested={coach.line?.demo || undefined} aria-expanded={showDemo} aria-controls="bench-demo" onKeyDown={(event) => {
             if (event.key === "Escape" && showDemo) setShowDemo(false);
           }}>
           <Icon name={showDemo ? "close" : "play"} size={17} /> {showDemo ? "Вернуться к модели" : "Показать приём"}
-        </SceneButton>}
+        </SceneButton>
       </div>
       <div className="bench-practice-actions">
-        {coach && waitingForNext && (
+        {waitingForNext && (
           <SceneButton type="button" className="button primary" onActivate={() => choose(pending)}>
             К сиденью <Icon name="arrow" size={17} />
           </SceneButton>
         )}
-        {coach && complete && <>
+        {complete && <>
           <SceneButton type="button" className="button ghost" onActivate={() => choose(otherPart)}>
             {exercises[otherPart].switchTo}
           </SceneButton>

@@ -1,5 +1,5 @@
 import type { Ref } from "react";
-import { stationDetails, stations, type StationId } from "../engine/scenario";
+import { barbell, stationDetails, stations, type StationId } from "../engine/scenario";
 import { completedStationCount, type Progress } from "../engine/game";
 import { asset, Icon } from "./graphics";
 import { SceneButton } from "./scene-button";
@@ -16,58 +16,46 @@ const stationArt = {
   INVENTORY: "nav-storage",
 } satisfies Record<StationId, string>;
 
-export function IntroCover({ heading, begin, training }: { heading: Heading; begin: () => void; training: () => void }) {
-  return (
-    <section className="intro-cover">
-      <div className="intro-cover-hero">
-        <h1 ref={heading} tabIndex={-1}>Первый раз в зале</h1>
-        <img src={asset("coach-greeting")} alt="" width={407} height={510} fetchPriority="high" />
-      </div>
-      <p className="intro-cover-message">Привет! Собираешься на первую тренировку? Давай заранее разберёмся со снарядами. Покажу, где искать гантели и как выставить скамью.</p>
-      <div className="intro-cover-actions">
-        <SceneButton type="button" className="button primary" onActivate={begin}>Начать игру <Icon name="arrow" /></SceneButton>
-        <SceneButton type="button" className="button ghost" onActivate={training}>Занятия с тренером <Icon name="arrow" size={17} /></SceneButton>
-      </div>
-    </section>
-  );
-}
-
 export function Route({ heading, progress, begin }: { heading: Heading; progress: Progress; begin: () => void }) {
   const done = completedStationCount(progress);
   return (
     <section className="route">
       <div className="game-heading">
         <h1 ref={heading} tabIndex={-1}>Маршрут</h1>
-        <p className="stage-score"><Icon name="check" size={15} /> <strong>{done}</strong><span> / {stations.length}</span></p>
+        <div className="route-counter" aria-label={`Пройдено ${done} из ${stations.length}`}>
+          <span className="route-meter" aria-hidden="true">{stations.map(({ stage }, index) =>
+            <i key={stage} data-step={index < done ? "done" : index === done ? "active" : undefined} />)}
+          </span>
+          <span><strong>{done}</strong> / {stations.length}</span>
+        </div>
       </div>
       <CoachMessage>{done === 0 ? "Здесь четыре короткие станции. Начнём с гантелей."
-        : done === stations.length ? "Все станции пройдены."
-          : `Следующая станция — ${stationDetails[stations[done].stage].name.toLowerCase()}.`}</CoachMessage>
+        : `Следующая станция — ${stations[done].title.toLowerCase()}.`}</CoachMessage>
       <ol className="route-stations" role="list" aria-label="Станции">
-        {stations.map(({ stage }, index) => {
+        {stations.map(({ stage, title }, index) => {
           const completed = index < done;
           const current = index === done;
           return <li key={stage} aria-current={current ? "step" : undefined}
             data-progress={completed ? "done" : current ? "current" : "locked"}>
             <span className="route-number">{completed ? <><Icon name="check" size={16} /><span className="sr-only">Пройдено</span></> : index + 1}</span>
+            <div className="route-copy"><strong>{title}</strong>
+              <span>{stationDetails[stage].purpose}</span>
+            </div>
             <div className="route-art">
               <img className="route-prop" src={asset(stationArt[stage])} alt="" />
-            </div>
-            <div className="route-copy"><strong>{stationDetails[stage].name}</strong>
-              <span>{stationDetails[stage].purpose}</span>
             </div>
             {!completed && !current && <span className="route-lock" aria-label="Откроется после предыдущего задания"><Icon name="lock" size={14} /></span>}
           </li>;
         })}
       </ol>
       <SceneButton type="button" className="button primary" onActivate={begin}>
-        {done === stations.length ? "К проверке" : done === 0 && progress.phase === "ready" ? "Начать" : "К станции"} <Icon name="arrow" />
+        {done === 0 && progress.phase === "ready" ? "Начать" : "К станции"} <Icon name="arrow" />
       </SceneButton>
     </section>
   );
 }
 
-export function SceneResult({ heading, stage, next }: { heading: Heading; stage: StationId; next: () => void }) {
+export function SceneResult({ heading, stage, next }: { heading: Heading; stage: "DUMBBELLS" | "BARBELL"; next: () => void }) {
   const detail = stationDetails[stage];
   if (stage === "BARBELL") {
     return (
@@ -75,7 +63,7 @@ export function SceneResult({ heading, stage, next }: { heading: Heading; stage:
         <CheckBurst />
         <h1 id="scene-result-title" tabIndex={-1} ref={heading}>{detail.lessonTitle}</h1>
         <ul aria-label="Проверка сборки">
-          {([["80 кг", "weight"], ["Вес поровну", "balance"], ["2 замка", "lock"]] as const).map(([label, icon]) =>
+          {([[`${barbell.targetKg} кг`, "weight"], ["Вес поровну", "balance"], [`${barbell.closedCollars} замка`, "lock"]] as const).map(([label, icon]) =>
             <li key={label}><span><Icon name="check" size={16} /></span>{label}<Icon name={icon} size={20} /></li>)}
         </ul>
         <div className="scene-result-tip">
@@ -97,10 +85,9 @@ export function SceneResult({ heading, stage, next }: { heading: Heading; stage:
   );
 }
 
-export function Finish({ heading, training, passed, startPoint }: {
+export function Finish({ heading, training, startPoint }: {
   heading: Heading;
   training: (target: Training) => void;
-  passed: boolean;
   startPoint: () => void;
 }) {
   return (
@@ -111,9 +98,8 @@ export function Finish({ heading, training, passed, startPoint }: {
         </div>
         <h1 ref={heading} tabIndex={-1}>Первый подход <span>пройден</span></h1>
         <ul className="finish-stations" aria-label="Пройденные станции">
-          {stations.map(({ stage }) => <li key={stage}><Icon name="check" size={16} />{stationDetails[stage].name}</li>)}
+          {stations.map(({ stage, title }) => <li key={stage}><Icon name="check" size={16} />{title}</li>)}
         </ul>
-        {passed && <p className="finish-challenge"><Icon name="check" size={18} /> Контрольная ситуация — без подсказок</p>}
       </div>
       <div className="finish-next">
         <p>Для конкретных тренажёров можно использовать видеоинструкции DDX по QR-коду.</p>
@@ -143,7 +129,8 @@ const trainingOptions = {
   },
 } as const;
 
-export function TrainingInfo({ heading, active, back }: { heading: Heading; active: Training; back: () => void }) {
+export function TrainingInfo({ heading, active, back, onLink }: { heading: Heading; active: Training; back: () => void;
+  onLink: (target: Training) => void }) {
   const alternate: Training = active === "smart-start" ? "intro" : "smart-start";
   const options: Training[] = [active, alternate];
   return (
@@ -159,7 +146,7 @@ export function TrainingInfo({ heading, active, back }: { heading: Heading; acti
               <span className="recap-icon"><Icon name={option.icon} size={22} /></span>
               <h2>{option.name}</h2>
               <p>{option.description}</p>
-              <a className={`button ${id === active ? "primary" : "secondary"}`} href={option.href} target="_blank" rel="noopener noreferrer">
+              <a className={`button ${id === active ? "primary" : "secondary"}`} href={option.href} onClick={() => onLink(id)} target="_blank" rel="noopener noreferrer">
                 {option.action} <Icon name="external" size={18} />
               </a>
             </article>

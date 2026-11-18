@@ -144,7 +144,7 @@
 .club-week button[aria-pressed="true"] span { color: var(--background); }
 .club-calendar-note, .club-agenda { margin-top: 4px; color: var(--muted); font-size: 12px; }
 .club-agenda { padding: 13px; border-radius: 12px; background: var(--surface); }
-.club-training-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.club-training-cards { display: grid; }
 .club-training-card {
   position: relative;
   isolation: isolate;

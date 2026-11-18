@@ -1,7 +1,8 @@
 import { useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { createPortal, preload } from "react-dom";
 import { barbellLayout, checkBarbell, type BarbellDestination } from "../engine/barbell";
-import type { Action, Progress, Result } from "../engine/game";
+import { inventoryPlacements, stationTotal, type Action, type Progress, type Result } from "../engine/game";
+import { inventoryMilestone, inventoryRemaining } from "../engine/inventory";
 import { barbell, barbellSides, floorId, inventoryPlateWeights, plateRackSlot, rackRows, rackTargets, stationDetails, type BarbellSide, type Station } from "../engine/scenario";
 import { barbellRule, dumbbellRule, inventoryRule, shelfLabels } from "../engine/station-hints";
 import { asset, Icon, inventoryAsset } from "./graphics";
@@ -15,7 +16,7 @@ import rackArt from "./rack-art.json";
 
 type Submit = (action: Action) => Result;
 type Props = { progress: Progress; submit: Submit };
-type SpatialProps = Props & { station: Station; coach?: Coach; goal?: number };
+type SpatialProps = Props & { station: Station; coach: Coach };
 type Point = { x: number; y: number };
 type Prop = Point & {
   id: string;
@@ -50,7 +51,7 @@ type Retreat = Drag & { dx: number; dy: number };
 type Landing = { from: Point; destination: string };
 
 function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = false, highlight, guideItem,
-  verified, assisted = true, prompt, footer, children }: {
+  verified, prompt, footer, children }: {
   name: string;
   props: readonly Prop[];
   targets: readonly Target[];
@@ -60,7 +61,6 @@ function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = f
   highlight?: string;
   guideItem?: string;
   verified?: boolean;
-  assisted?: boolean;
   prompt?: string;
   footer?: ReactNode;
   children: ReactNode;
@@ -101,7 +101,7 @@ function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = f
       if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         setLandings((previous) => ({ ...previous, [prop.id]: { from, destination: target } }));
       }
-      if (result.progress.phase !== "lesson" && target !== floorId) playFeedback(prop.cue, prop.pulse);
+      if (result.progress.phase === "playing" && target !== floorId) playFeedback(prop.cue, prop.pulse);
     } else {
       setReturned(prop.id);
     }
@@ -109,7 +109,7 @@ function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = f
   }
 
   function pointerDown(event: PointerEvent<HTMLDivElement>, prop: Prop) {
-    if (!event.isPrimary || event.button !== 0 || start.current) return;
+    if (prop.stationary || !event.isPrimary || event.button !== 0 || start.current) return;
     const picked = props.find((item) => item.id === prop.outermostId) ?? prop;
     onPick?.(picked.id);
     setReturned(undefined);
@@ -188,14 +188,13 @@ function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = f
   }
 
   const floating = drag ?? retreat;
-  const guide = assisted && !floating && highlight ? targets.find(({ id }) => id === highlight) : undefined;
+  const guide = !floating && highlight ? targets.find(({ id }) => id === highlight) : undefined;
   const guidedProp = guide && props.find(({ id, stationary }) => id === guideItem && !stationary);
   const landedTargets = Object.values(landings).map(({ destination }) => destination);
 
   return <div className="station-arena" data-verified={verified || undefined}>
     <div className={"interaction-field " + name} ref={field}
       data-tap-ready={tapToPlace && Boolean(selected) || undefined}
-      data-unassisted={!assisted || undefined}
       data-verified={verified || undefined}
       onKeyDown={(event) => {
         if (event.key === "Escape") cancelSelection();
@@ -241,7 +240,7 @@ function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = f
             onPointerCancel={(event) => pointerEnd(event, true)}
             onLostPointerCapture={(event) => pointerEnd(event, true)}
             onKeyDown={(event) => {
-              if (event.key !== " " && event.key !== "Enter") return;
+              if (prop.stationary || (event.key !== " " && event.key !== "Enter")) return;
               event.preventDefault();
               select(prop, true);
             }}>
@@ -263,9 +262,9 @@ function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = f
         <div key={target.id} className="scene-drop" role="button" tabIndex={0} aria-label={target.label}
           data-scene-target={target.id}
           data-target-kind={target.kind}
-          data-over={assisted && drag?.over === target.id || undefined}
+          data-over={drag?.over === target.id || undefined}
           data-tip-target={highlight === target.id || undefined}
-          data-settled={assisted && target.id !== floorId && landedTargets.includes(target.id) || undefined}
+          data-settled={target.id !== floorId && landedTargets.includes(target.id) || undefined}
           style={{
             left: target.x + "%", top: target.y + "%", width: target.width + "%", height: target.height + "%",
           }}
@@ -284,7 +283,7 @@ function InteractionField({ name, props, targets, onDrop, onPick, tapToPlace = f
         document.body,
       )}
     </div>
-    {assisted && !verified && (prompt || selected) && <p className="interaction-cue" aria-live="polite">
+    {!verified && (prompt || selected) && <p className="interaction-cue" aria-live="polite">
       <span className="cue-icon"><Icon name={selected?.keyboard ? "keyboard" : "touch"} size={20} /></span>
       {selected?.keyboard ? "Выбери место клавишей Tab и нажми пробел."
         : selected ? "Коснись места, куда поставить предмет." : prompt}
@@ -328,11 +327,11 @@ const rackDropTargets = [
   { id: floorId, label: "На пол перед стойкой", x: 50, y: 77, width: 98, height: 45 },
 ];
 
-export function DumbbellScene({ station, progress, submit, coach }: Props & { station: Station; coach?: Coach }) {
+function DumbbellScene({ station, progress, submit, coach }: SpatialProps) {
   const [picked, setPicked] = useState<string>();
   const assigned = progress.placements.DUMBBELLS;
   const needed = station.items.filter((item) => !assigned[item.id]);
-  const hintItem = needed.find((item) => dumbbellRule(item.weightKg!).id === coach?.active?.id)
+  const hintItem = needed.find((item) => dumbbellRule(item.weightKg!).id === coach.active?.id)
     ?? needed.find((item) => item.id === picked) ?? needed[0];
   const rule = hintItem ? dumbbellRule(hintItem.weightKg!) : undefined;
   const props = station.items.map<Prop>((item, index) => {
@@ -347,14 +346,13 @@ export function DumbbellScene({ station, progress, submit, coach }: Props & { st
     return {
       ...position, id: item.id, label: item.label, location: assigned[item.id] ?? floorId,
       src: spot ? asset("rack-dumbbell-" + item.weightKg) : dragSrc,
-      dragSrc, cue: "dumbbell", fitted: Boolean(spot), stationary: !coach && Boolean(spot),
+      dragSrc, cue: "dumbbell", fitted: Boolean(spot),
     };
   });
 
   function place(prop: Prop, destination: string) {
     const weight = station.items.find(({ id }) => id === prop.id)!.weightKg!;
     const result = submit({ kind: "place", stage: "DUMBBELLS", item: prop.id, destination });
-    if (!coach) return result;
     const rule = dumbbellRule(weight);
     if (!result.accepted) {
       if (prop.location !== destination && destination !== floorId) coach.mistake(rule);
@@ -372,18 +370,21 @@ export function DumbbellScene({ station, progress, submit, coach }: Props & { st
 
   return (
     <div className="dumbbell-board">
-      {coach && <CoachFeedback message={stationDetails.DUMBBELLS.instruction} line={coach.line}
+      <CoachFeedback message={stationDetails.DUMBBELLS.instruction} line={coach.line}
         controls={<AssistControls coach={coach} rule={rule} example={hintItem && {
           item: asset("dumbbell-floor-" + hintItem.weightKg), destination: asset("dumbbell-rack-empty"),
-        }} />} />}
-      <InteractionField name="gym-floor" props={props} targets={rackDropTargets} highlight={coach?.line?.highlight} onDrop={place}
+        }} />} />
+      <InteractionField name="gym-floor" props={props} targets={rackDropTargets} highlight={coach.line?.highlight} onDrop={place}
         guideItem={hintItem?.id} prompt="Перетащи гантель на свободное место."
-        onPick={coach ? (item) => { setPicked(item); coach.act(); } : undefined} tapToPlace assisted={Boolean(coach)}>
+        onPick={(item) => { setPicked(item); coach.act(); }} tapToPlace>
         <span className="gym-rack-shadow" aria-hidden="true" />
         <img className="scene-backdrop" style={rackStyle(dumbbellRack)} src={asset("dumbbell-rack-empty")} draggable={false}
-          alt="На верхней полке стоят пары 2, 4 и 6 кг. На нижней стоят пары 10 и 14 кг." />
+          alt={rackRows.map((row, shelf) => {
+            const fixed = row.filter((weightKg) => !rackTargets.some((slot) => slot.weightKg === weightKg));
+            return `На ${shelf ? "нижней" : "верхней"} полке стоят пары ${fixed.join(", ")} кг.`;
+          }).join(" ")} />
         {rackPockets.filter((pocket) => !pocket.target).flatMap(({ weight, positions }) => {
-          const art = rackArt.parts[weight];
+          const art = rackArt.parts[String(weight) as keyof typeof rackArt.parts];
           return positions.map((position) => (
             <img className="rack-fixed-dumbbell" key={weight + "-" + position.x} src={asset("rack-dumbbell-" + weight)} alt=""
               draggable={false} style={{ left: position.x + "%", top: position.y + "%", width: art.width * rackedDumbbellScale + "%",
@@ -392,11 +393,11 @@ export function DumbbellScene({ station, progress, submit, coach }: Props & { st
         })}
         {rackPockets.map((pocket) => {
           const filled = pocket.target ? props.filter((prop) => prop.location === pocket.target?.id).length : 2;
-          const highlighted = pocket.target?.id === coach?.line?.highlight;
+          const highlighted = pocket.target?.id === coach.line?.highlight;
           return (
             <span className="rack-pair" data-shelf={pocket.shelf + 1} data-first-slot={pocket.pair * 2 + 1}
-              data-paired={Boolean(coach && pocket.target) && filled === 2 || undefined}
-              data-vacant={Boolean(coach) && filled < 2 || undefined} data-guided={Boolean(highlighted && coach?.line?.highlight) || undefined}
+              data-paired={Boolean(pocket.target) && filled === 2 || undefined}
+              data-vacant={filled < 2 || undefined} data-guided={Boolean(highlighted && coach.line?.highlight) || undefined}
               aria-hidden="true" key={pocket.weight} style={{ left: pocket.x + "%", top: pocket.rest + "%" }}>
               {[0, 1].map((index) => <i key={index} data-empty={index >= filled || undefined} />)}
             </span>
@@ -422,8 +423,8 @@ const traySpots = Object.fromEntries(traySlots.flatMap((row, y) =>
   row.map((id, x) => [id, { x: 12.4 + 18.8 * x, y: 65 + 22 * y }] as const),
 ));
 
-const stockSize = { 5: 11.4, 10: 13, 20: 14.9 };
-const diskDetails = {
+const stockSize: Readonly<Record<number, number>> = { 5: 11.4, 10: 13, 20: 14.9 };
+const diskDetails: Readonly<Record<number, { asset: keyof typeof barbellArt.parts; thickness: number; pulse: number | readonly number[] | undefined }>> = {
   5: { asset: "bar-disk-5", thickness: .029, pulse: undefined },
   10: { asset: "bar-disk-10", thickness: .045, pulse: 13 },
   20: { asset: "bar-disk-20", thickness: .065, pulse: [40, 16, 22] },
@@ -434,16 +435,16 @@ function onShaft(axial: number, verified = false) {
     y: (verified ? 45 : 27) + barbellArt.axis[1] * axial * (verified ? 1.84 : 1) };
 }
 
-export function BarbellScene({ progress, submit, coach, goal = barbell.targetKg }: Props & { coach?: Coach; goal?: number }) {
+function BarbellScene({ progress, submit, coach }: Props & { coach: Coach }) {
   const [resetCount, setResetCount] = useState(0);
   const assembly = progress.barbell;
-  const layout = barbellLayout(assembly, goal);
+  const layout = barbellLayout(assembly);
   const { totalKg, collarCount } = layout;
   const prompt = !layout.disksReady ? "Перетащи диски на гриф."
-    : collarCount === 2 ? "Теперь можно проверить сборку." : "Закрепи диски замками.";
+    : collarCount === barbell.closedCollars ? "Теперь можно проверить сборку." : "Закрепи диски замками.";
   const verified = progress.phase === "lesson";
-  const check = checkBarbell(assembly, goal);
-  const rule = coach?.active ?? (check.accepted ? {
+  const check = checkBarbell(assembly);
+  const rule = coach.active ?? (check.accepted ? {
     id: "barbell-verification",
     steps: ["Оба замка закрыты. Осталось проверить сборку.", "Внизу есть кнопка «Проверить».", "Нажми «Проверить»." ] as const,
   } : barbellRule(check.issue, layout));
@@ -495,7 +496,6 @@ export function BarbellScene({ progress, submit, coach, goal = barbell.targetKg 
 
   function apply(input: Action) {
     const result = submit(input);
-    if (!coach) return result;
     if (!result.accepted) {
       if (result.issue) coach.mistake(barbellRule(result.issue, layout));
       return result;
@@ -509,8 +509,8 @@ export function BarbellScene({ progress, submit, coach, goal = barbell.targetKg 
     if (next.totalKg <= barbell.targetKg) resolved.push("barbell-mass-over");
     if (next.symmetric) resolved.push("barbell-imbalanced");
     if (next.disksReady) resolved.push("barbell-early-collar");
-    if (mounted === 2) resolved.push("barbell-missing-collar");
-    if (next.collarCount === 2) resolved.push("barbell-open-collar");
+    if (mounted === barbell.closedCollars) resolved.push("barbell-missing-collar");
+    if (next.collarCount === barbell.closedCollars) resolved.push("barbell-open-collar");
     if (input.kind === "toggle-collar" && !nextAssembly.locked[input.side]) resolved.push("barbell-locked-collar");
     if (input.kind === "move-barbell" && input.item.startsWith("LOCK_")) {
       resolved.push(input.destination === floorId ? "barbell-blocked-sleeve" : "barbell-occupied-collar");
@@ -519,9 +519,9 @@ export function BarbellScene({ progress, submit, coach, goal = barbell.targetKg 
 
     const message = input.kind === "check-barbell" ? "Вес поровну. Оба замка зафиксированы."
       : input.kind === "reset-barbell" ? "Гриф снова пустой. Диски и замки на полу."
-        : next.collarCount === 2 ? "Оба замка защёлкнуты. Можно проверить сборку."
+        : next.collarCount === barbell.closedCollars ? "Оба замка защёлкнуты. Можно проверить сборку."
           : next.collarCount === 1 ? "Один замок закрыт. Остался второй."
-            : mounted === 2 ? "Замки на месте. Осталось закрыть рычажки."
+            : mounted === barbell.closedCollars ? "Замки на месте. Осталось закрыть рычажки."
               : mounted === 1 ? "Один замок на месте. Остался второй."
                 : next.disksReady ? "Вес собран. Осталось зафиксировать диски."
                   : totalKg === next.totalKg ? "Вес перераспределён. Сборку можно проверить."
@@ -534,19 +534,19 @@ export function BarbellScene({ progress, submit, coach, goal = barbell.targetKg 
   const shadowTop = onShaft(0, verified).y + (verified ? 1.84 : 1) * (diskHeight / 2 - 1.4);
   return (
     <div className="barbell-board">
-      {coach && <CoachFeedback message={stationDetails.BARBELL.instruction} line={coach.line}
+      <CoachFeedback message={stationDetails.BARBELL.instruction} line={coach.line}
         controls={<AssistControls coach={coach} rule={rule} example={rule.demo ? {
           item: asset(rule.id.includes("collar") || rule.id.endsWith("sleeve") ? "bar-tray-collar" : "bar-tray-20"),
           destination: asset("bar-shaft"),
-        } : undefined} />} />}
-      <div className="barbell-mass" data-on-weight={totalKg === goal || undefined}>
+        } : undefined} />} />
+      <div className="barbell-mass" data-on-weight={totalKg === barbell.targetKg || undefined}>
         <div><span>Текущий вес</span><strong key={totalKg} data-current-weight={totalKg}
           data-verified={verified || undefined} aria-live="polite">{totalKg} кг</strong></div>
-        <p>Цель <strong>{goal} кг</strong></p>
+        <p>Цель <strong>{barbell.targetKg} кг</strong></p>
       </div>
       <InteractionField key={resetCount} name="barbell-table" props={verified ? props.filter((prop) => prop.location !== floorId) : props}
-        targets={verified ? [] : barbellTargets} verified={verified} assisted={Boolean(coach)} prompt={prompt}
-        onPick={coach?.act}
+        targets={verified ? [] : barbellTargets} verified={verified} prompt={prompt}
+        onPick={coach.act}
         onDrop={(prop, destination) => apply({ kind: "move-barbell", item: prop.id, destination: destination as BarbellDestination })}>
         <span className="barbell-shadow" style={{ top: shadowTop + "%" }} aria-hidden="true" />
         <img className="shaft-art" src={asset("bar-shaft")} alt="" draggable={false}
@@ -573,7 +573,7 @@ export function BarbellScene({ progress, submit, coach, goal = barbell.targetKg 
       {!verified && <>
         <div className="assembly-note">
           <span>Гриф весит {barbell.shaftKg} кг</span>
-          {Object.keys(assembly.collars).length > 0 && <span><Icon name="lock" size={14} /> Замки {collarCount}/2</span>}
+          {Object.keys(assembly.collars).length > 0 && <span><Icon name="lock" size={14} /> Замки {collarCount}/{barbell.closedCollars}</span>}
         </div>
         <div className="assembly-actions">
           <SceneButton type="button" className="button primary assembly-check" onActivate={() => apply({ kind: "check-barbell" })}>
@@ -659,23 +659,20 @@ const looseInventory: Record<string, StorageSpot> = {
   ])),
 };
 
-const shelfMilestones: Partial<Record<string, string>> = {
-  MATS: "Коврики лежат стопкой на нижней полке.", BLOCKS: "Блоки на месте.", ROLLERS: "МФР-роллы на месте.", BANDS: "Резинки на месте.",
-};
-
-export function InventoryScene({ station, progress, submit, coach }: Props & { station: Station; coach?: Coach }) {
+function InventoryScene({ station, progress, submit, coach }: SpatialProps) {
   const [picked, setPicked] = useState<string>();
   preload(asset("finish-medal"), { as: "image" });
-  const assigned = progress.placements.INVENTORY;
+  const assigned = inventoryPlacements(progress);
   const zones = station.targets.map((target) => ({
     ...target, ...storage[target.id],
     items: Object.keys(assigned).filter((id) => assigned[id] === target.id),
   }));
-  const stored = Object.keys(assigned);
-  const plates = stored.filter((id) => id.startsWith("PLATE_")).length;
-  const needed = station.items.filter((item) => !assigned[item.id]);
-  const hintItem = needed.find((item) => inventoryRule(item).id === coach?.active?.id)
-    ?? needed.find((item) => item.id === picked) ?? needed[0];
+  const remaining = inventoryRemaining(assigned);
+  const pickedItem = remaining.loose.find((item) => item.id === picked);
+  const guidedItem = pickedItem?.targetId === coach.line?.highlight ? pickedItem
+    : remaining.loose.find((item) => item.targetId === coach.line?.highlight);
+  const hintItem = pickedItem ?? guidedItem
+    ?? remaining.loose.find((item) => item.targetId === coach.active?.highlight) ?? remaining.loose[0];
   const props = station.items.map<Prop>((item) => {
     const zone = zones.find((zone) => zone.id === assigned[item.id]);
     const order = zone?.items.indexOf(item.id) ?? 0;
@@ -696,20 +693,13 @@ export function InventoryScene({ station, progress, submit, coach }: Props & { s
   function place(prop: Prop, destination: string) {
     const item = station.items.find(({ id }) => id === prop.id)!;
     const result = submit({ kind: "place", stage: "INVENTORY", item: prop.id, destination });
-    if (!coach) return result;
     const rule = inventoryRule(item);
     if (!result.accepted) {
       coach.mistake(rule);
       return result;
     }
-    const next = Object.values(result.progress.placements.INVENTORY);
-    const shelfFull = next.filter((slot) => slot === destination).length === 2;
-    const milestone = next.length === station.items.length ? "Все предметы на месте."
-      : destination === "MATS" && !shelfFull ? "Коврик развернулся на нижней полке."
-        : next.length === 1 ? "Да. Дальше можно ориентироваться по подписям на стойках."
-        : item.weightKg !== undefined && plates + 1 === inventoryPlateWeights.length ? "Все диски на стойке."
-          : shelfFull ? shelfMilestones[destination]
-            : undefined;
+    const remaining = inventoryRemaining(inventoryPlacements(result.progress));
+    const milestone = inventoryMilestone(item, remaining, Object.keys(result.progress.placements.INVENTORY).length);
     if (milestone || coach.line?.tone === "hint") {
       coach.say(milestone ?? "Предмет на месте. Какие ещё остались на полу?", "success", [rule.id]);
     } else {
@@ -720,15 +710,15 @@ export function InventoryScene({ station, progress, submit, coach }: Props & { s
 
   return (
     <div className="inventory-board">
-      {coach && <CoachFeedback message={stationDetails.INVENTORY.instruction} line={coach.line}
+      <CoachFeedback message={`В зоне осталось убрать ${stationTotal(station)} предметов. Верни их на места.`} line={coach.line}
         controls={<AssistControls coach={coach} rule={hintItem && inventoryRule(hintItem)} example={hintItem && {
           item: inventoryAsset(hintItem), destination: asset(hintItem.weightKg ? "inventory-plate-rack" : "inventory-storage-rack"),
-        }} />} />}
-      <InteractionField name="storage-floor" props={props} targets={zones} highlight={coach?.line?.highlight} assisted={Boolean(coach)}
-        guideItem={hintItem?.id} tapToPlace onDrop={place} onPick={coach ? (item) => { setPicked(item); coach.act(); } : undefined}
-        footer={coach && <div className="inventory-progress" aria-live="polite">
-          <InventoryMeter icon="disc" label="Диски" done={plates} count={inventoryPlateWeights.length} />
-          <InventoryMeter icon="cube" label="Инвентарь" done={stored.length - plates} count={station.items.length - inventoryPlateWeights.length} />
+        }} />} />
+      <InteractionField name="storage-floor" props={props} targets={zones} highlight={guidedItem?.targetId}
+        guideItem={guidedItem?.id} tapToPlace onDrop={place} onPick={(item) => { setPicked(item); coach.act(); }}
+        footer={<div className="inventory-progress" aria-live="polite">
+          <InventoryMeter icon="disc" label="Диски" remaining={remaining.plates} />
+          <InventoryMeter icon="cube" label="Инвентарь" remaining={remaining.supplies} />
         </div>}>
         <span className="supply-rack-shadow" aria-hidden="true" />
         <img className="storage-rack plate-rack" style={rackStyle(plateRack)} src={asset("inventory-plate-rack")} draggable={false} alt="" />
@@ -736,7 +726,7 @@ export function InventoryScene({ station, progress, submit, coach }: Props & { s
         {zones.map((zone) => {
           const full = zone.items.length === zone.spots.length;
           return <div key={zone.id} className="storage-slot" aria-hidden="true">
-            {Boolean(coach) && zone.kind === "shelf" && <span className="shelf-light" data-full={full || undefined}
+            {zone.kind === "shelf" && <span className="shelf-light" data-full={full || undefined}
               style={{ left: zone.x + "%", top: (zone.y + 2.5) + "%" }} />}
             <span className="storage-slot-label" data-kind={zone.kind} data-zone={zone.id} data-full={full || undefined}
               style={{ left: zone.tag.x + "%", top: zone.tag.y + "%" }}>{zone.tag.text}</span>
@@ -747,16 +737,11 @@ export function InventoryScene({ station, progress, submit, coach }: Props & { s
   );
 }
 
-function InventoryMeter({ icon, label, done, count }: { icon: "disc" | "cube"; label: string; done: number; count: number }) {
-  return <div className="inventory-meter">
-    <Icon name={icon} size={25} />
-    <div>
-      <p>{label} <strong>{done} / {count}</strong></p>
-      <div className="meter-segments" aria-hidden="true">{Array.from({ length: count }, (_, index) =>
-        <i key={index} data-filled={index < done || undefined} />,
-      )}</div>
-    </div>
-  </div>;
+function InventoryMeter({ icon, label, remaining }: { icon: "disc" | "cube"; label: string; remaining: number }) {
+  return <p className="inventory-meter">
+    <Icon name={icon} size={19} />
+    <span>{label} · осталось <strong>{remaining}</strong></span>
+  </p>;
 }
 
 export function SpatialStation(props: SpatialProps) {

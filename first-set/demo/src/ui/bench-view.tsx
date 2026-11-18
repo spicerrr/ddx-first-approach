@@ -554,7 +554,7 @@ export default function BenchView(props: Props) {
   }
 
   return (
-    <div ref={modelRoot} className="bench-view" data-model={status} data-goal={props.target !== undefined && !props.paused || undefined}
+    <div ref={modelRoot} className="bench-view" data-model={status}
       data-unlocked={unlocked || undefined} data-aligned={aligned || undefined}
       tabIndex={0} aria-label={status === "failed" ? "Схема скамьи" : "Трёхмерная скамья"}
       aria-describedby={props.paused ? undefined : "bench-operation"}

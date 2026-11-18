@@ -1,54 +1,128 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:first-approach:game-event:v1",
-  "title": "Proposed game-domain event v1 — not a DDX production contract",
+  "title": "Аналитические события «Первого подхода»",
   "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "schemaVersion",
-    "eventId",
-    "eventType",
-    "occurredAt",
-    "sessionId",
-    "scenarioVersion",
-    "revision"
-  ],
   "properties": {
     "schemaVersion": {
-      "const": "1"
+      "const": "2"
     },
-    "eventId": {
+    "scenarioVersion": {
       "type": "string",
-      "format": "uuid"
-    },
-    "eventType": {
-      "type": "string",
-      "enum": [
-        "game_session_started",
-        "game_stage_completed",
-        "game_session_completed",
-        "game_session_abandoned",
-        "game_session_expired"
-      ]
+      "pattern": "^\\d+\\.\\d+$"
     },
     "occurredAt": {
       "type": "string",
       "format": "date-time"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "scenarioVersion",
+    "occurredAt",
+    "eventType"
+  ],
+  "oneOf": [
+    {
+      "properties": {
+        "eventType": {
+          "enum": [
+            "first_approach_exposed",
+            "first_approach_started",
+            "first_approach_completed",
+            "first_approach_skipped"
+          ]
+        }
+      }
     },
-    "sessionId": {
-      "type": "string",
-      "format": "uuid"
+    {
+      "properties": {
+        "eventType": {
+          "enum": [
+            "first_approach_stage_started",
+            "first_approach_stage_completed"
+          ]
+        },
+        "stage": {
+          "$ref": "#/$defs/stage"
+        }
+      },
+      "required": [
+        "stage"
+      ]
     },
-    "scenarioVersion": {
-      "type": "string",
-      "minLength": 1
+    {
+      "properties": {
+        "eventType": {
+          "enum": [
+            "first_approach_hint_requested",
+            "first_approach_demo_opened"
+          ]
+        },
+        "stage": {
+          "$ref": "#/$defs/stage"
+        },
+        "concept": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*[a-zA-Z0-9_-]*$"
+        }
+      },
+      "required": [
+        "stage",
+        "concept"
+      ]
     },
-    "revision": {
-      "type": "integer",
-      "minimum": 1
+    {
+      "properties": {
+        "eventType": {
+          "const": "first_approach_hint_level_reached"
+        },
+        "stage": {
+          "$ref": "#/$defs/stage"
+        },
+        "concept": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*[a-zA-Z0-9_-]*$"
+        },
+        "hintLevel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        }
+      },
+      "required": [
+        "stage",
+        "concept",
+        "hintLevel"
+      ]
     },
+    {
+      "properties": {
+        "eventType": {
+          "const": "training_cta_clicked"
+        },
+        "source": {
+          "enum": [
+            "start-point",
+            "station",
+            "finish"
+          ]
+        },
+        "training": {
+          "enum": [
+            "intro",
+            "smart-start"
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "training"
+      ]
+    }
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {
     "stage": {
-      "type": "string",
       "enum": [
         "DUMBBELLS",
         "BARBELL",
@@ -56,24 +130,5 @@
         "INVENTORY"
       ]
     }
-  },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "eventType": {
-            "const": "game_stage_completed"
-          }
-        },
-        "required": [
-          "eventType"
-        ]
-      },
-      "then": {
-        "required": [
-          "stage"
-        ]
-      }
-    }
-  ]
+  }
 }

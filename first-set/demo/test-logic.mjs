@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { newProgress, nextStation, start, stationProgress, submit } from "./src/engine/game";
+import { completedStationCount, newProgress, nextStation, start, stationProgress, submit } from "./src/engine/game";
 import { barbellLayout } from "./src/engine/barbell";
 import { floorId, rackRows, rackTargets, stations } from "./src/engine/scenario";
 
-const at = "2026-11-16T09:00:00.000Z";
+const fixedLayout = () => .99;
 const place = (stage, item, destination) => ({ kind: "place", stage, item, destination });
 const dumbbell = (item, target) => place("DUMBBELLS", item, target);
 const move = (item, destination) => ({ kind: "move-barbell", item, destination });
@@ -38,21 +38,21 @@ const actions = [
 ];
 
 function accept(progress, action) {
-  const result = submit(progress, action, at);
+  const result = submit(progress, action);
   expect(result, result.message).toMatchObject({ accepted: true });
   return result.progress;
 }
 
 function reject(progress, action, explanation) {
-  const result = submit(progress, action, at);
+  const result = submit(progress, action);
   expect(result.accepted).toBe(false);
   expect(result.progress).toBe(progress);
   if (explanation) expect(result.message).toContain(explanation);
 }
 
 function atStation(index) {
-  let progress = start(newProgress(), at);
-  for (let i = 0; i < index; i++) progress = nextStation(actions[i].reduce(accept, progress));
+  let progress = start(newProgress(), fixedLayout);
+  for (let i = 0; i < index; i++) progress = start(nextStation(actions[i].reduce(accept, progress)), fixedLayout);
   return progress;
 }
 
@@ -60,24 +60,21 @@ describe("Один игровой маршрут", () => {
   it("зачитывает четыре станции и завершает маршрут один раз", () => {
     let progress = atStation(0);
     for (const [index, group] of actions.entries()) {
-      for (const [step, action] of group.entries()) {
+      const playable = index === 3 ? group.filter(({ item }) => !progress.inventoryInitial[item]) : group;
+      for (const [step, action] of playable.entries()) {
         progress = accept(progress, action);
         const done = index === 0 ? Math.floor((step + 1) / 2)
           : index === 1 ? Number(action === check)
           : index === 2 ? Math.min(2, step + 1) : step + 1;
         expect(stationProgress(progress, stations[index])).toBe(done);
       }
-      expect(progress.phase).toBe(index === 2 ? "playing" : "lesson");
+      expect(progress.phase).toBe(index === 3 ? "complete" : index === 2 ? "ready" : "lesson");
       expect(progress.stageIndex).toBe(index === 2 ? index + 1 : index);
-      reject(progress, group.at(-1));
-      progress = nextStation(progress);
+      expect(completedStationCount(progress)).toBe(index + 1);
+      reject(progress, playable.at(-1));
+      progress = start(nextStation(progress), fixedLayout);
     }
     expect(progress.phase).toBe("complete");
-    expect(progress.events.map((event) => event.type)).toEqual([
-      "game_session_started",
-      "game_stage_completed", "game_stage_completed", "game_stage_completed", "game_stage_completed",
-      "game_session_completed",
-    ]);
     expect(start(progress)).toBe(progress);
     expect(nextStation(progress)).toBe(progress);
   });
@@ -89,9 +86,10 @@ describe("Один игровой маршрут", () => {
     expect(fresh.placements).toEqual({ DUMBBELLS: {}, INVENTORY: {} });
     expect(barbellLayout(fresh.barbell)).toMatchObject({ totalKg: 20, leftKg: 0, rightKg: 0, collarCount: 0 });
     expect(fresh.barbell.disks).toEqual({ LEFT: [], RIGHT: [] });
-    expect(fresh.events).toEqual([]);
+    expect(fresh.inventoryInitial).toEqual({});
     reject(fresh, actions[0][0]);
-    expect(start(start(fresh, at), at).events).toHaveLength(1);
+    const opened = start(fresh);
+    expect(start(opened)).toBe(opened);
   });
 
   it("сортирует гантели в соседние парные места по весу и полке", () => {
@@ -128,7 +126,7 @@ describe("Один игровой маршрут", () => {
     reject(over, check, "на 5 кг больше цели");
   });
 
-  it("замок остаётся в лотке, пока штанга не набрана симметрично", () => {
+  it("замок остаётся на полу, пока штанга не набрана симметрично", () => {
     const initial = atStation(1);
     reject(initial, move("LOCK_A", "LEFT"), "ставим в конце");
     const sameDisksUnder = twenties.reduce(accept, initial);
@@ -138,7 +136,7 @@ describe("Один игровой маршрут", () => {
     const locked = closeBarbell.slice(0, 4).reduce(accept, differentDisks);
     const reset = accept(locked, { kind: "reset-barbell" });
     expect(reset).toMatchObject({ stageIndex: 1, barbell: { disks: { LEFT: [], RIGHT: [] }, collars: {}, locked: {} } });
-    expect(reset.events).toBe(locked.events);
+    expect(reset.phase).toBe("playing");
   });
 
   it("зачитывает равный вес при разном числе дисков и двух замках", () => {
@@ -203,7 +201,7 @@ describe("Один игровой маршрут", () => {
     expect(stationProgress(lowered, stations[2])).toBe(2);
     const advanced = accept(lowered, finishBench);
     expect(advanced.stageIndex).toBe(3);
-    expect(advanced.phase).toBe("playing");
+    expect(advanced.phase).toBe("ready");
   });
 
   it("отклоняет чужую зону, неизвестный предмет и действие другой станции", () => {

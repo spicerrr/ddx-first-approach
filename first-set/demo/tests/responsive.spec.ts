@@ -1,33 +1,34 @@
 import { test, expect } from "@playwright/test";
-import { button, keyboardBench, keyboardPlace, noOverflow, openBench, placements, solveChallenge } from "./controls";
+import { button, keyboardBench, keyboardPlace, looseInventory, noOverflow, openBench, openRoute, placements } from "./controls";
 
-const nextButtons = ["К штанге", "К скамье", "К инвентарю", "К контрольной ситуации"];
+const nextButtons = ["К штанге", "К скамье", "К инвентарю"];
 
 for (const width of [320, 375, 402, 430, 768, 1440]) {
   test(`экраны и доступность кнопок при ширине ${width} px`, async ({ page }) => {
     await page.setViewportSize({ width, height: width < 700 ? 874 : 900 });
     await page.goto("");
-    await expect(button(page, "Открыть игру")).toBeVisible();
+    await expect(button(page, "Точка старта")).toBeVisible();
     await noOverflow(page);
     if (width >= 520) {
       expect(await page.locator(".app").evaluate((el) => [el.clientWidth, el.clientHeight])).toEqual([402, 874]);
       const bounds = (await page.locator(".app").boundingBox())!;
       expect(bounds.width / bounds.height).toBeCloseTo(402 / 874, 2);
     }
-    await button(page, "Открыть игру").click();
-    const cover = page.locator(".intro-cover-hero");
-    const title = await cover.getByRole("heading").boundingBox();
-    const portrait = await cover.locator("img").boundingBox();
-    expect(portrait!.y).toBeGreaterThanOrEqual(title!.y + title!.height);
+    await openRoute(page);
     await noOverflow(page);
-    await button(page, "Начать игру").click();
     const route = page.getByRole("list", { name: "Станции" });
     await expect(route).toHaveCSS("list-style-type", "none");
     await expect(route.getByRole("listitem")).toHaveCount(4);
     await expect(route.getByRole("listitem").first()).toHaveCSS("display", "grid");
-    expect(await route.locator("img").evaluateAll((images) =>
-      images.every((img) => img.clientWidth <= 70 && img.clientHeight === 46),
-    )).toBe(true);
+    const hero = route.locator('[data-progress="current"] .route-art img');
+    await expect(hero).toBeVisible();
+    expect((await hero.boundingBox())!.width).toBeGreaterThan(75);
+    await expect(route.locator('[data-progress="locked"]')).toHaveCount(3);
+    expect(await route.locator("li").evaluateAll((cards) => cards.every((card) => {
+      const body = card.getBoundingClientRect();
+      const image = card.querySelector("img")!.getBoundingClientRect();
+      return image.top >= body.top && image.bottom <= body.bottom;
+    }))).toBe(true);
     await expect(button(page, "Начать")).toBeInViewport();
     await button(page, "Начать").click();
     for (const [index, name] of ["dumbbells", "barbell", "bench", "inventory"].entries()) {
@@ -59,7 +60,7 @@ for (const width of [320, 375, 402, 430, 768, 1440]) {
         await openBench(page);
         await keyboardBench(page);
       } else {
-        for (const pair of placements[name as keyof typeof placements]) await keyboardPlace(page, pair);
+        for (const pair of name === "inventory" ? await looseInventory(page) : placements[name as keyof typeof placements]) await keyboardPlace(page, pair);
         if (name === "barbell") {
           await button(page, "Защёлкнуть левый замок").click();
           await button(page, "Защёлкнуть правый замок").click();
@@ -67,11 +68,11 @@ for (const width of [320, 375, 402, 430, 768, 1440]) {
         }
       }
       await noOverflow(page);
-      await button(page, nextButtons[index]).click();
-      await button(page, index === 3 ? "К проверке" : "К станции").click();
+      if (index < nextButtons.length) {
+        await button(page, nextButtons[index]).click();
+        await button(page, "К станции").click();
+      }
     }
-    await solveChallenge(page);
-    await button(page, "К итогам").click();
     await expect(button(page, "Вернуться в Точку старта")).toBeVisible();
     await noOverflow(page);
   });

@@ -1,123 +1,93 @@
-"""Проверка контрактов и целостности аналитических документов проекта."""
-from __future__ import annotations
+"""Проверки сценария 2.0, схемы аналитики, ссылок и прослеживаемости."""
 
-from pathlib import Path
+from collections import Counter
 import json
+from pathlib import Path
 import re
 
-import yaml
 from jsonschema import Draft202012Validator, FormatChecker
-from openapi_spec_validator import validate_spec
 
-repo = Path(__file__).resolve().parents[3]
-sa = repo / "first-set" / "sa"
-api = yaml.safe_load((sa / "contracts/openapi.yaml").read_text(encoding="utf-8"))
-events = json.loads((sa / "contracts/events.schema.json").read_text(encoding="utf-8"))
-scenario = json.loads((sa / "contracts/scenario-v1.sample.json").read_text(encoding="utf-8"))
-
-validate_spec(api)
-Draft202012Validator.check_schema(events)
-stages = ["DUMBBELLS", "BARBELL", "BENCH", "INVENTORY"]
-assert api["components"]["schemas"]["Stage"]["enum"] == stages
-assert events["properties"]["stage"]["enum"] == stages
-assert len(api["components"]["schemas"]["AnswerRequest"]["properties"]["action"]["oneOf"]) == 4
-assert [stage["stage"] for stage in scenario["stages"]] == stages
-assert [stage["interactionKind"] for stage in scenario["stages"]] == [
-    "PAIR_TO_SLOT", "DISK_TO_SIDE", "ORDERED_CHECKS", "ITEM_TO_ZONE"
+SA = Path(__file__).resolve().parents[1]
+REPO = SA.parents[1]
+DOCS = [
+    REPO / "README.md",
+    REPO / "first-set/ba/README.md",
+    SA / "README.md",
+    REPO / "first-set/demo/README.md",
 ]
-assert [len(stage["items"]) for stage in scenario["stages"]] == [3, 4, 6, 8]
-for stage in scenario["stages"]:
-    ids = [item["id"] for item in stage["items"]]
-    assert len(ids) == len(set(ids)), f"duplicate IDs in {stage['stage']}"
 
-sample = {
-    "schemaVersion": "1",
-    "eventId": "11111111-1111-4111-8111-111111111111",
-    "eventType": "game_stage_completed",
-    "occurredAt": "2026-10-28T12:00:00Z",
-    "sessionId": "22222222-2222-4222-8222-222222222222",
-    "scenarioVersion": "1.0",
-    "revision": 2,
-    "stage": "DUMBBELLS",
+
+def contract(name):
+    return json.loads((SA / "contracts" / name).read_text(encoding="utf-8"))
+
+
+scenario = contract("scenario-v2.sample.json")
+dumbbells, barbell, bench, inventory = scenario["stages"]
+stage_ids = [stage["stage"] for stage in scenario["stages"]]
+assert stage_ids == ["DUMBBELLS", "BARBELL", "BENCH", "INVENTORY"]
+for station in scenario["stages"]:
+    ids = [item["id"] for item in station.get("items", [])]
+    assert len(ids) == len(set(ids)), station["stage"]
+
+slots = {slot["targetId"]: slot["weightKg"] for row in dumbbells["rackRows"] for slot in row if "targetId" in slot}
+assert Counter(slots[item["targetId"]] for item in dumbbells["items"]) == {8: 2, 12: 2, 16: 2}
+assert Counter(item["weightKg"] for item in barbell["items"] if item["kind"] == "disk") == {5: 4, 10: 2, 20: 2}
+assert barbell["sides"] == ["LEFT", "RIGHT"]
+assert barbell["shaftKg"] == 20
+assert barbell["completion"] == {"targetKg": 80, "sideDifferenceKg": 0, "closedCollars": 2}
+assert sum(item["kind"] == "collar" for item in barbell["items"]) == barbell["completion"]["closedCollars"]
+assert [(part["id"], part["targetNotch"]) for part in bench["parts"]] == [("backrest", 2), ("seat", 1)]
+assert all(part["targetNotch"] in bench["notches"] for part in bench["parts"])
+
+plates = [item for item in inventory["items"] if "weightKg" in item]
+supplies = [item for item in inventory["items"] if "weightKg" not in item]
+assert sorted(item["weightKg"] for item in plates) == [5, 10, 15, 20, 25]
+assert len({item["targetId"] for item in plates}) == len(plates)
+assert Counter(item["targetId"] for item in supplies) == {zone["id"]: 2 for zone in inventory["shelvesAndHooks"]}
+assert set(item["targetId"] for item in plates).isdisjoint(item["targetId"] for item in supplies)
+assert len(inventory["items"]) == 13
+assert inventory["initialLayout"] == {
+    "platesPreplaced": 2,
+    "distinctStorageZonesPreplaced": 3,
+    "minLoosePerStorageZone": 1,
 }
+
+events = contract("events.schema.json")
+Draft202012Validator.check_schema(events)
+assert events["$defs"]["stage"]["enum"] == stage_ids
 validator = Draft202012Validator(events, format_checker=FormatChecker())
-assert not list(validator.iter_errors(sample))
-assert list(validator.iter_errors({k: v for k, v in sample.items() if k != "stage"}))
-assert list(validator.iter_errors({**sample, "memberName": "DO NOT PUBLISH"}))
+event_base = {"schemaVersion": "2", "scenarioVersion": scenario["version"], "occurredAt": "2026-11-18T08:00:00Z"}
+examples = {
+    "first_approach_exposed": {},
+    "first_approach_started": {},
+    "first_approach_stage_started": {"stage": "DUMBBELLS"},
+    "first_approach_stage_completed": {"stage": "INVENTORY"},
+    "first_approach_hint_requested": {"stage": "INVENTORY", "concept": "inventory-MATS"},
+    "first_approach_hint_level_reached": {"stage": "INVENTORY", "concept": "inventory-MATS", "hintLevel": 3},
+    "first_approach_demo_opened": {"stage": "BENCH", "concept": "bench-backrest-locked"},
+    "first_approach_completed": {},
+    "first_approach_skipped": {},
+    "training_cta_clicked": {"source": "finish", "training": "intro"},
+}
+for name, fields in examples.items():
+    example = {**event_base, "eventType": name, **fields}
+    validator.validate(example)
+    assert not validator.is_valid({**example, "memberName": "example"})
+    for field in fields:
+        assert not validator.is_valid({k: v for k, v in example.items() if k != field})
 
-# Четыре основных документа; подробности реализации остаются в коде и контрактах.
-generated_dirs = {".git", "node_modules", "dist", "test-results", "playwright-report"}
-markdown_files = sorted(
-    p.relative_to(repo).as_posix()
-    for p in repo.rglob("*.md")
-    if generated_dirs.isdisjoint(p.relative_to(repo).parts)
-)
-expected = sorted(["README.md", "first-set/ba/README.md", "first-set/sa/README.md", "first-set/demo/README.md"])
-assert markdown_files == expected, f"unexpected Markdown document tree: {markdown_files}"
-
-for path in [repo / p for p in expected]:
-    body = path.read_text(encoding="utf-8")
+documents = {file: file.read_text(encoding="utf-8") for file in DOCS}
+for file, body in documents.items():
     for dest in re.findall(r"\]\(([^)]+)\)", body):
         if dest.startswith(("https://", "http://", "mailto:", "#")):
             continue
-        dest_path = dest.split("#", 1)[0].split("?", 1)[0]
-        if dest_path and not (path.parent / dest_path).exists():
-            raise AssertionError(f"Broken link: {path.relative_to(repo)} → {dest}")
+        path = dest.split("#", 1)[0].split("?", 1)[0]
+        assert not path or (file.parent / path).exists(), f"{file.relative_to(REPO)} → {dest}"
 
-# Проверяем структуру аналитических документов и полноту формальных реестров.
-ba_text = (repo / "first-set/ba/README.md").read_text(encoding="utf-8")
-sa_text = (repo / "first-set/sa/README.md").read_text(encoding="utf-8")
-# Требования располагаются в самостоятельных разделах, а не в общей сводной таблице.
-ba_sections = [
-    "## 3. Заинтересованные стороны и потребности",
-    "## 4. Цели и показатели результата",
-    "## 5. Функциональные требования",
-    "## 6. Бизнес-правила",
-    "## 7. Нефункциональные требования",
-    "## 8. Ограничения и интеграционные зависимости",
-    "## 9. Зафиксированные продуктовые решения",
-    "## 11. Реестр фактов и гипотез",
-    "## 12. Прослеживаемость требований",
-]
-sa_sections = [
-    "## 3. Системные требования и их прослеживаемость",
-    "## 4. Жизненный цикл сессии",
-    "## 5. Логическая модель данных",
-    "## 7. События и их источники",
-    "## 8. Критерии приёмки",
-    "## 9. Открытые вопросы",
-]
-for section in ba_sections:
-    assert section in ba_text, f"BA: missing section {section}"
-for section in sa_sections:
-    assert section in sa_text, f"SA: missing section {section}"
-
-# Структура ключевых таблиц и идентификаторов проверяется независимо от языка полей API.
-for title in ["| ID | Заинтересованная сторона | Потребность |",
-              "| ID | Цель | Критерий оценки | Статус |",
-              "| ID | Требование | Основание |",
-              "| ID | Правило | Следствие для функции |",
-              "| ID | Ограничение | Следствие |"]:
-    assert title in ba_text, f"BA: missing table {title}"
-for title in ["| ID | Основание (BA) | Системное требование | Критерии приёмки |",
-              "| Действие | Предусловие | Результат |",
-              "| ID | Условие / действие | Ожидаемый результат |"]:
-    assert title in sa_text, f"SA: missing table {title}"
-
-def check_ids(body: str, prefix: str, count: int) -> None:
-    expected = {f"{prefix}-{number:02d}" for number in range(1, count + 1)}
-    observed = set(re.findall(rf"\b{prefix}-\d{{2}}\b", body))
-    assert observed == expected, f"{prefix}: missing {sorted(expected-observed)}, unknown {sorted(observed-expected)}"
-
-for prefix, count in {"BG":3,"SN":5,"FR":11,"RL":6,"NFR":4,"IC":3,"EV":10,"PD":8}.items():
-    check_ids(ba_text, prefix, count)
-for prefix, count in {"SA":8,"AC":26,"OQ":12}.items():
-    check_ids(sa_text, prefix, count)
-for id in (f"AC-{i:02d}" for i in range(1, 27)):
-    assert re.search(rf"^\| {re.escape(id)} \|", sa_text, re.MULTILINE), f"{id}: no acceptance row"
-for id in (f"SA-{i:02d}" for i in range(1, 9)):
-    assert re.search(rf"^\| {re.escape(id)} \|", sa_text, re.MULTILINE), f"{id}: no traceability row"
-
-assert "Smart Start" in (repo / "README.md").read_text(encoding="utf-8")
-assert "accepted" in (sa / "README.md").read_text(encoding="utf-8")
-print("OK: контракты, ссылки, разделы BA/SA, все требования и 26 критериев приёмки")
+ba = documents[DOCS[1]]
+sa = documents[DOCS[2]]
+ba_requirements = set(re.findall(r"^\| ((?:FR|NFR)-\d\d) \|", ba, re.M))
+assert ba_requirements == set(re.findall(r"\b(?:FR|NFR)-\d\d\b", sa))
+assert all(name in sa for name in examples)
+assert all(f"AC-{index:02d}" in sa for index in range(1, 8))
+print("OK: сценарий 2.0, десять аналитических событий, ссылки и трассируемость")

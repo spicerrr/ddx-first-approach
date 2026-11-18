@@ -18,7 +18,7 @@ export function SceneButton({ onActivate, ...props }: Props) {
       onTouchEnd={(event) => {
         const tap = start.current;
         start.current = null;
-        if (!tap) return;
+        if (!tap || event.currentTarget.disabled) return;
         const finger = Array.from(event.changedTouches).find((touch) => touch.identifier === tap.id);
         if (!finger || Math.hypot(finger.clientX - tap.x, finger.clientY - tap.y) > 14) return;
         const rect = event.currentTarget.getBoundingClientRect();

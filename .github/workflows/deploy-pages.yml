@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - first-set/demo/**
-      - first-set/sa/contracts/scenario-v1.sample.json
+      - first-set/sa/contracts/scenario-v2.sample.json
       - .github/workflows/deploy-pages.yml
   workflow_dispatch:
 

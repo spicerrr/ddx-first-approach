@@ -1,6 +1,6 @@
 import type { HintRule } from "./hints";
 import type { BarbellIssue, barbellLayout } from "./barbell";
-import { barbell, inventoryDestination, rackRows, rackTargets, type BenchPart, type Item } from "./scenario";
+import { barbell, barbellSides, rackRows, rackTargets, type BenchPart, type Item } from "./scenario";
 
 export function dumbbellRule(weight: number): HintRule {
   const slot = rackTargets.find((target) => target.weightKg === weight)!;
@@ -24,7 +24,7 @@ export function dumbbellRule(weight: number): HintRule {
 export function barbellRule(issue: BarbellIssue, layout: ReturnType<typeof barbellLayout>): HintRule {
   const { totalKg, leftKg, rightKg } = layout;
   const diskKg = barbell.targetKg - barbell.shaftKg;
-  const perSide = `Для равновесия нужно по ${diskKg / 2} кг с каждой стороны.`;
+  const perSide = `Для равновесия нужно по ${diskKg / barbellSides.length} кг с каждой стороны.`;
   const load = `Слева ${leftKg} кг дисков, справа ${rightKg} кг.`;
   const steps: Record<BarbellIssue, HintRule["steps"]> = {
     "mass-under": [`Сейчас ${totalKg} кг. До цели не хватает ${barbell.targetKg - totalKg} кг.`,
@@ -80,7 +80,7 @@ export const shelfLabels: Readonly<Record<string, string>> = {
 };
 
 export function inventoryRule(item: Item): HintRule {
-  const slot = inventoryDestination(item)!;
+  const slot = item.targetId!;
   const steps: HintRule["steps"] = item.weightKg !== undefined ? [
     "Для дисков есть отдельная стойка.",
     "Сверь вес диска с подписью на штыре.",
@@ -94,5 +94,6 @@ export function inventoryRule(item: Item): HintRule {
     "Для этого типа инвентаря есть отдельная полка.",
     `Ищи полку «${shelfLabels[slot]}».`,
   ];
-  return { id: "inventory-" + slot, steps, highlight: slot, demo: "Могу показать место для этого предмета." };
+  return { id: item.weightKg === undefined ? "inventory-" + slot : "inventory-plates",
+    steps, highlight: slot, demo: "Могу показать место для этого предмета." };
 }

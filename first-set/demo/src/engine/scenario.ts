@@ -1,7 +1,10 @@
-import scenario from "../../../sa/contracts/scenario-v1.sample.json";
+import scenario from "../../../sa/contracts/scenario-v2.sample.json";
 
 export type StationId = "DUMBBELLS" | "BARBELL" | "BENCH" | "INVENTORY";
-export type Item = { id: string; label: string; weightKg?: number };
+export type BenchPart = "backrest" | "seat";
+export type BenchNotch = number;
+export type BarbellSide = "LEFT" | "RIGHT";
+export type Item = { id: string; label: string; weightKg?: number; targetId?: string };
 export type Destination = { id: string; label: string };
 export type Station = {
   stage: StationId;
@@ -10,140 +13,86 @@ export type Station = {
   targets: readonly Destination[];
 };
 
-const contractStations = scenario.stages as readonly Station[];
+type BarbellItem = { id: string } & ({ kind: "disk"; weightKg: number } | { kind: "collar" });
+type InventoryItem = { id: string; targetId: string } & ({ weightKg: number; label?: never } | { label: string; weightKg?: never });
+type Definition = { title: string } & (
+  | { stage: "DUMBBELLS"; rackRows: { weightKg: number; targetId?: string }[][]; items: { id: string; targetId: string }[] }
+  | { stage: "BARBELL"; shaftKg: number; sides: BarbellSide[]; items: BarbellItem[];
+      completion: { targetKg: number; sideDifferenceKg: number; closedCollars: number } }
+  | { stage: "BENCH"; notches: BenchNotch[]; parts: { id: BenchPart; targetNotch: BenchNotch }[] }
+  | { stage: "INVENTORY"; shelvesAndHooks: Destination[]; items: InventoryItem[];
+      initialLayout: { platesPreplaced: number; distinctStorageZonesPreplaced: number; minLoosePerStorageZone: number } }
+);
+
+const definitions = scenario.stages as readonly Definition[];
+const rackSpec = definitions.find((definition) => definition.stage === "DUMBBELLS")!;
+const barbellSpec = definitions.find((definition) => definition.stage === "BARBELL")!;
+const benchSpec = definitions.find((definition) => definition.stage === "BENCH")!;
+const inventorySpec = definitions.find((definition) => definition.stage === "INVENTORY")!;
+
+export const scenarioVersion = scenario.version;
 export const floorId = "FLOOR";
-export const rackRows = [[2, 4, 6, 8], [10, 12, 14, 16]] as const;
-const rackWeights = [8, 12, 16];
-export const rackTargets = rackRows.flatMap((row, shelf) => Array.from(row).flatMap((weightKg, pair) =>
-  rackWeights.includes(weightKg) ? [{
-    id: `RACK_${weightKg}`, label: `${shelf === 0 ? "Верхняя" : "Нижняя"} полка, пара ${pair + 1}`, weightKg, shelf, pair,
+export const rackRows = rackSpec.rackRows.map((row) => row.map(({ weightKg }) => weightKg));
+export const rackTargets = rackSpec.rackRows.flatMap((row, shelf) => row.flatMap(({ weightKg, targetId }, pair) =>
+  targetId ? [{
+    id: targetId, label: `${shelf === 0 ? "Верхняя" : "Нижняя"} полка, пара ${pair + 1}`, weightKg, shelf, pair,
   }] : [],
 ));
 
-export const benchParts = ["backrest", "seat"] as const;
-export type BenchPart = typeof benchParts[number];
-export const benchNotches = [0, 1, 2, 3] as const;
-export type BenchNotch = typeof benchNotches[number];
-export const benchGoals = { backrest: 2, seat: 1 } as const satisfies Record<BenchPart, BenchNotch>;
+export const benchParts = benchSpec.parts.map(({ id }) => id);
+export const benchNotches = benchSpec.notches;
+export const benchGoals = Object.fromEntries(benchSpec.parts.map(({ id, targetNotch }) => [id, targetNotch])) as Record<BenchPart, BenchNotch>;
 
-export const inventoryPlateWeights = [5, 10, 15, 20, 25] as const;
-export const plateRackSlot = (weightKg: number) => `PLATES_${weightKg}`;
-const inventoryTargetLabels: Readonly<Record<string, string>> = {
-  MATS: "Нижняя полка для ковриков",
-  BLOCKS: "Средняя полка для блоков",
-  ROLLERS: "Верхняя полка для роллов",
-  BANDS: "Боковые крючки для резинок",
-};
-
-const dumbbells = rackWeights.flatMap((weightKg) =>
-  ["A", "B"].map((copy) => ({
-    id: `DB_${weightKg}_${copy}`,
-    label: `Гантель ${weightKg} кг`,
-    weightKg,
-  })),
-);
-
-export const barbellSides = ["LEFT", "RIGHT"] as const;
-export type BarbellSide = typeof barbellSides[number];
-export type BarbellProp =
-  | { id: string; label: string; kind: "disk"; weightKg: 5 | 10 | 20 }
-  | { id: string; label: string; kind: "collar" };
-
+export const barbellSides = barbellSpec.sides;
 export const barbell = {
-  shaftKg: 20,
-  targetKg: 80,
-  props: [
-    { id: "DISK_20_A", label: "Диск 20 кг", kind: "disk", weightKg: 20 },
-    { id: "DISK_20_B", label: "Диск 20 кг", kind: "disk", weightKg: 20 },
-    { id: "DISK_5_A", label: "Диск 5 кг", kind: "disk", weightKg: 5 },
-    { id: "DISK_5_B", label: "Диск 5 кг", kind: "disk", weightKg: 5 },
-    { id: "DISK_5_C", label: "Диск 5 кг", kind: "disk", weightKg: 5 },
-    { id: "DISK_5_D", label: "Диск 5 кг", kind: "disk", weightKg: 5 },
-    { id: "DISK_10_A", label: "Диск 10 кг", kind: "disk", weightKg: 10 },
-    { id: "DISK_10_B", label: "Диск 10 кг", kind: "disk", weightKg: 10 },
-    { id: "LOCK_A", label: "Замок для грифа", kind: "collar" },
-    { id: "LOCK_B", label: "Замок для грифа", kind: "collar" },
-  ] satisfies BarbellProp[],
+  shaftKg: barbellSpec.shaftKg,
+  ...barbellSpec.completion,
+  props: barbellSpec.items.map((item) => ({
+    ...item, label: item.kind === "disk" ? `Диск ${item.weightKg} кг` : "Замок для грифа",
+  })),
 };
 
-export const stations: readonly Station[] = contractStations.map((station) => {
-  switch (station.stage) {
-    case "DUMBBELLS": return { ...station, title: "Гантели", items: dumbbells, targets: rackTargets };
-    case "BARBELL": return { ...station, title: "Штанга", items: barbell.props };
-    case "BENCH": return {
-      ...station, title: "Скамья",
-      items: [],
+const plateItems = inventorySpec.items.filter((item) => item.weightKg !== undefined);
+export const inventoryPlateWeights = plateItems.map(({ weightKg }) => weightKg);
+export const plateRackSlot = (weightKg: number) => plateItems.find((item) => item.weightKg === weightKg)!.targetId;
+export const inventoryLayout = inventorySpec.initialLayout;
+
+export const stations: readonly Station[] = definitions.map(({ stage, title }) => {
+  switch (stage) {
+    case "DUMBBELLS": return {
+      stage, title, targets: rackTargets,
+      items: rackSpec.items.map((item) => {
+        const { weightKg } = rackTargets.find(({ id }) => id === item.targetId)!;
+        return { ...item, weightKg, label: `Гантель ${weightKg} кг` };
+      }),
     };
+    case "BARBELL": return { stage, title, items: barbell.props, targets: [] };
+    case "BENCH": return { stage, title, items: [], targets: [] };
     case "INVENTORY": return {
-      ...station,
-      title: "Инвентарь",
-      items: [...station.items, ...inventoryPlateWeights.map((weightKg) => ({
-        id: `PLATE_${weightKg}`, label: `Бамперный диск ${weightKg} кг`, weightKg,
-      }))],
-      targets: [
-        ...station.targets.map((target) => ({ ...target, label: inventoryTargetLabels[target.id] ?? target.label })),
-        ...inventoryPlateWeights.map((weightKg) => ({ id: plateRackSlot(weightKg), label: `Место для диска ${weightKg} кг` })),
-      ],
+      stage, title,
+      items: inventorySpec.items.map((item) => ({ ...item, label: item.label ?? `Бамперный диск ${item.weightKg} кг` })),
+      targets: [...inventorySpec.shelvesAndHooks, ...plateItems.map(({ targetId, weightKg }) => ({ id: targetId, label: `Место для диска ${weightKg} кг` }))],
     };
   }
 });
 export const lastStation = stations.length - 1;
-export const stationTotal = (station: Station) => {
-  if (station.stage === "BARBELL") return 1;
-  if (station.stage === "DUMBBELLS") return station.targets.length;
-  return station.items.length + (station.stage === "BENCH" ? benchParts.length : 0);
-};
 
 export const stationDetails = {
   DUMBBELLS: {
-    name: "Гантели",
     purpose: "Пары и стойка",
-    instruction: "Куда встанут три пары с пола? Сверь соседние веса.",
+    instruction: "На полу три пары гантелей. Верни их на стойку.",
     lessonTitle: "Гантели на месте",
     nextButton: "К штанге",
-    takeaway: "Лёгкие пары ставь выше, тяжёлые ниже. На каждой полке вес растёт слева направо.",
   },
   BARBELL: {
-    name: "Штанга",
     purpose: "Вес и замки",
-    instruction: `Собери ${barbell.targetKg} кг и закрепи диски замками.`,
+    instruction: `Собери штангу весом ${barbell.targetKg} кг. Гриф весит ${barbell.shaftKg} кг. Когда закончишь — проверь сборку.`,
     lessonTitle: "Штанга собрана",
     nextButton: "К скамье",
-    takeaway: "Набирай вес симметрично. Когда диски на месте, надень и защёлкни замки.",
   },
   BENCH: {
-    name: "Скамья",
     purpose: "Регулировка",
-    lessonTitle: "Скамья готова",
     nextButton: "К инвентарю",
-    takeaway: "Удерживай фиксатор, меняя наклон. В новом положении отпусти его и проверь фиксацию подушки.",
   },
-  INVENTORY: {
-    name: "Инвентарь",
-    purpose: "Зоны хранения",
-    instruction: "Разложи снаряды по местам. Подсказки есть на стойках.",
-    lessonTitle: "Проход свободен",
-    nextButton: "К контрольной ситуации",
-    takeaway: "После подхода верни инвентарь в зоны хранения.",
-  },
-} satisfies Record<StationId, {
-  name: string;
-  purpose: string;
-  instruction?: string;
-  lessonTitle: string;
-  nextButton: string;
-  takeaway: string;
-}>;
-
-const inventoryZones: Readonly<Partial<Record<string, string>>> = {
-  MAT: "MATS",
-  BAND: "BANDS",
-  BLOCK: "BLOCKS",
-  ROLLER: "ROLLERS",
+  INVENTORY: { purpose: "Зоны хранения" },
 };
-
-export function inventoryDestination(item: Item) {
-  const kind = item.id.split("_")[0];
-  if (kind === "PLATE" && item.weightKg !== undefined) return plateRackSlot(item.weightKg);
-  return inventoryZones[kind];
-}

@@ -1,24 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { completedStationCount, newProgress, nextStation, restoreProgress, start, stationProgress, submit, type Action } from "./engine/game";
+import { completedStationCount, newProgress, nextStation, restoreProgress, start, stationProgress, stationTotal, submit, type Action } from "./engine/game";
 import { readCompletedStations, saveCompletedStations } from "./engine/progress-storage";
-import { failedChallenge, newChallenge, submitChallenge } from "./engine/challenge";
-import { stations, stationTotal } from "./engine/scenario";
+import { track } from "./engine/analytics";
+import { stations } from "./engine/scenario";
 import { Icon } from "./ui/graphics";
-import { Finish, IntroCover, Route, SceneResult, TrainingInfo, type Training } from "./ui/screens";
+import { Finish, Route, SceneResult, TrainingInfo, type Training } from "./ui/screens";
 import { ClubAction, ClubCalendar, ClubHeader, ClubNavigation, ClubStartPoint, Home, type ClubTab } from "./ui/home";
 import { SceneButton } from "./ui/scene-button";
 import { Sheet } from "./ui/sheet";
 import { useCoach } from "./ui/use-coach";
 import { initialInputMode } from "./ui/input-mode";
 import { GameHelp, HintExample, type Example, type HelpOptions } from "./ui/station-help";
-import { ChallengeScreen } from "./ui/challenge-screen";
 import { enableAudio, playFeedback, unlockAudio } from "./ui/feedback";
 import { StationBoard } from "./ui/station-board";
 import { warmStation } from "./ui/station-resources";
 import "./style.css";
 
-type EntryView = ClubTab | "cover" | "route" | "play" | "transfer";
+type EntryView = ClubTab | "route" | "play" | "finish";
 type View = EntryView | "training";
 type Overlay = { kind: "exit" } | { kind: "help"; options: HelpOptions } | { kind: "example"; example: Example };
 
@@ -26,10 +25,7 @@ function App() {
   const [session, setSession] = useState(() => restoreProgress(readCompletedStations()));
   const savedCount = useRef(completedStationCount(session));
   const [view, setView] = useState<View>("home");
-  const [entryTab, setEntryTab] = useState<ClubTab>("home");
   const [overlay, setOverlay] = useState<Overlay>();
-  const [challenge, setChallenge] = useState<ReturnType<typeof newChallenge>>();
-  const coach = useCoach();
   const [training, setTraining] = useState<{ target: Training; from: EntryView }>({ target: "smart-start", from: "home" });
   const [inputMode, setInputMode] = useState(initialInputMode);
   const [soundOn, setSoundOn] = useState(true);
@@ -37,18 +33,34 @@ function App() {
   const screen = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const station = stations[session.stageIndex];
+  const coach = useCoach(station.stage);
   const placed = stationProgress(session, station);
   const total = stationTotal(station);
   const stationsDone = completedStationCount(session);
   const play = view === "play";
   const lesson = play && session.phase === "lesson";
-  const complete = play && session.phase === "complete";
+  const complete = view === "finish";
+  const completing = play && session.phase === "complete";
   const spatial = station.stage !== "BENCH";
   const sceneResult = lesson && station.stage !== "BENCH";
   const focusView = sceneResult ? "result" : complete ? "finish" : view;
-  const stageHeader = play && !complete || view === "transfer";
-  const stationScreen = play && (session.phase === "playing" || lesson);
+  const stationScreen = play;
   const clubTab = view === "home" || view === "calendar" || view === "action" || view === "start-point" ? view : null;
+
+  useEffect(() => {
+    if (view === "start-point") track({ eventType: "first_approach_exposed" });
+  }, [view]);
+
+  useEffect(() => {
+    if (!completing) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setView("finish");
+      return;
+    }
+    // Keep the last landing visible before switching to the result.
+    const timer = window.setTimeout(() => setView("finish"), 920);
+    return () => window.clearTimeout(timer);
+  }, [completing]);
 
   useEffect(() => {
     if (!stationScreen) return;
@@ -72,7 +84,7 @@ function App() {
     heading.current?.focus({ preventScroll: true });
     if (sceneResult) {
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const delay = reduceMotion ? 0 : station.stage === "INVENTORY" ? 920 : 320;
+      const delay = reduceMotion ? 0 : 320;
       const timer = window.setTimeout(() => heading.current?.scrollIntoView({
         block: "nearest", behavior: reduceMotion ? "instant" : "smooth",
       }), delay);
@@ -91,19 +103,20 @@ function App() {
     window.scrollTo({ top: 0, behavior: "instant" });
   }
 
-  function begin(from: ClubTab) {
-    const saved = savedCount.current;
-    setSession(restoreProgress(saved));
-    setChallenge(undefined);
+  function begin() {
+    const restored = restoreProgress(savedCount.current);
+    setSession(restored);
     coach.reset();
-    setEntryTab(from);
-    setView(saved > 0 ? "route" : "cover");
+    setView(restored.phase === "complete" ? "finish" : "route");
   }
 
   function closeApproach() {
     setOverlay(undefined);
     setSession(restoreProgress(stationsDone));
-    setView(entryTab);
+    if (view === "route" && session.phase === "ready" && stationsDone === 0) {
+      track({ eventType: "first_approach_skipped" });
+    }
+    setView("start-point");
   }
 
   function returnToRoute() {
@@ -127,12 +140,11 @@ function App() {
   }
 
   function enterStation() {
-    if (session.phase === "complete") {
-      setChallenge((previous) => previous ?? newChallenge());
-      setView("transfer");
-      return;
+    if (session.phase === "ready") {
+      setSession(start(session));
+      if (session.stageIndex === 0) track({ eventType: "first_approach_started" });
+      track({ eventType: "first_approach_stage_started", stage: station.stage });
     }
-    setSession(start(session));
     setView("play");
   }
 
@@ -144,6 +156,8 @@ function App() {
       const done = completedStationCount(result.progress);
       if (done !== stationsDone) {
         rememberCompleted(done);
+        track({ eventType: "first_approach_stage_completed", stage: station.stage });
+        if (result.progress.phase === "complete") track({ eventType: "first_approach_completed" });
         playFeedback("complete");
       } else if (input.kind === "bench-adjustment") playFeedback("bench");
       if (input.kind === "finish-bench") {
@@ -154,18 +168,16 @@ function App() {
     return result;
   }
 
-  function attempt(input: Action) {
-    const next = submitChallenge(challenge!, input);
-    setChallenge(next.challenge);
-    if (next.challenge.outcome === "passed") playFeedback("complete");
-    else if (input.kind === "bench-adjustment" && next.result.accepted) playFeedback("bench");
-    return next.result;
+  function trainingLink(target: Training) {
+    const source = training.from === "play" ? "station" : training.from;
+    if (source === "start-point" || source === "station" || source === "finish") {
+      track({ eventType: "training_cta_clicked", source, training: target });
+    }
   }
 
   function leaveFinish() {
     rememberCompleted(0);
     setSession(newProgress());
-    setChallenge(undefined);
     setView("start-point");
   }
 
@@ -177,29 +189,29 @@ function App() {
           inert={Boolean(overlay)}
           onKeyDownCapture={(event) => {
             if (!event.altKey && !event.metaKey && !event.ctrlKey) setInputMode("keyboard");
-            if (stageHeader && !event.repeat) unlockAudio();
+            if (stationScreen && !event.repeat) unlockAudio();
           }}
           onTouchStartCapture={() => {
             setInputMode("touch");
-            if (stageHeader) unlockAudio();
+            if (stationScreen) unlockAudio();
           }}
           onPointerDownCapture={(event) => {
             if (event.pointerType === "touch" || event.pointerType === "pen") setInputMode("touch");
             if (event.pointerType === "mouse") setInputMode("mouse");
-            if (stageHeader) unlockAudio();
+            if (stationScreen) unlockAudio();
           }}>
-          {clubTab ? <ClubHeader home={home} /> : stageHeader ? (
+          {clubTab ? <ClubHeader home={home} /> : stationScreen ? (
             <header className="scene-header shell">
-              <SceneButton type="button" className="button quiet scene-route" onActivate={returnToRoute}>
+              <SceneButton type="button" className="button quiet scene-route" onActivate={returnToRoute} disabled={completing}>
                 <Icon name="back" size={17} /> Маршрут
               </SceneButton>
               <div className="scene-journey">
-                <span>{view === "transfer" ? "Контрольная ситуация" : `Станция ${session.stageIndex + 1} из ${stations.length}`}</span>
+                <span>{`Станция ${session.stageIndex + 1} из ${stations.length}`}</span>
                 <div aria-hidden="true">{stations.map((step, index) =>
                   <i key={step.stage} data-step={index < stationsDone ? "done" : index === session.stageIndex ? "active" : undefined} />,
                 )}</div>
               </div>
-              <SceneButton type="button" className="button quiet scene-close" onActivate={() => setOverlay({ kind: "exit" })} aria-label="Выйти"><Icon name="close" size={22} /></SceneButton>
+              <SceneButton type="button" className="button quiet scene-close" onActivate={() => setOverlay({ kind: "exit" })} disabled={completing} aria-label="Выйти"><Icon name="close" size={22} /></SceneButton>
             </header>
           ) : (
             <header className="site-header">
@@ -207,47 +219,53 @@ function App() {
                 <SceneButton type="button" className="wordmark" onActivate={view === "route" ? () => setOverlay({ kind: "exit" }) : home} aria-label="Первый подход — главная">
                   <strong>DDX</strong><span>FITNESS</span>
                 </SceneButton>
-                {(view === "route" || view === "cover") &&
-                  <SceneButton type="button" className="button quiet scene-close" onActivate={view === "cover" ? closeApproach : () => setOverlay({ kind: "exit" })} aria-label="Выйти"><Icon name="close" size={22} /></SceneButton>}
+                {view === "route" &&
+                  <SceneButton type="button" className="button quiet scene-close" onActivate={() => setOverlay({ kind: "exit" })} aria-label="Выйти"><Icon name="close" size={22} /></SceneButton>}
               </div>
             </header>
           )}
 
           <main className={"shell main-shell" + (stationScreen && spatial ? " spatial-shell" : "")}>
-            {view === "home" && <Home heading={heading} begin={() => begin("home")} training={openTraining}
+            {view === "home" && <Home heading={heading} training={openTraining}
               calendar={() => setView("calendar")} startPoint={() => setView("start-point")} />}
-            {view === "start-point" && <ClubStartPoint heading={heading} begin={() => begin("start-point")} training={openTraining} />}
-            {view === "calendar" && <ClubCalendar heading={heading} training={openTraining} approach={() => begin("calendar")} />}
-            {view === "action" && <ClubAction heading={heading} begin={() => begin("action")} training={openTraining} />}
-            {view === "cover" && <IntroCover heading={heading} begin={() => setView("route")} training={() => openTraining("intro")} />}
+            {view === "start-point" && <ClubStartPoint heading={heading} begin={begin} training={openTraining} />}
+            {view === "calendar" && <ClubCalendar heading={heading} training={openTraining} />}
+            {view === "action" && <ClubAction heading={heading} />}
             {view === "route" && <Route heading={heading} progress={session} begin={enterStation} />}
-            {view === "training" && <TrainingInfo heading={heading} active={training.target} back={() => setView(training.from)} />}
-            {view === "transfer" && challenge && <ChallengeScreen challenge={challenge} heading={heading}
-              inputMode={inputMode} submit={attempt} locked={() => setChallenge(failedChallenge(challenge))}
-              restart={() => setChallenge(newChallenge(challenge.stage))} finish={() => setView("play")} />}
+            {view === "training" && <TrainingInfo heading={heading} active={training.target}
+              back={() => setView(training.from)} onLink={trainingLink} />}
 
-            {complete && <Finish heading={heading} training={openTraining} passed={challenge?.outcome === "passed"} startPoint={leaveFinish} />}
+            {complete && <Finish heading={heading} training={openTraining} startPoint={leaveFinish} />}
             {stationScreen && (
               <section className={"game" + (spatial ? " game-spatial" : "")} key={station.stage} data-completed={lesson || undefined}>
                 <div className="station-content" inert={sceneResult}>
                   <div className="station-brief">
                     <div className="game-heading">
                       <h1 ref={sceneResult ? undefined : heading} tabIndex={-1}>{station.title}</h1>
-                      <p className="stage-score" data-full={placed === total || undefined} aria-label={"Выполнено " + placed + " из " + total}>
-                        <Icon name="check" size={18} /><strong key={placed}>{placed}</strong>
-                        <span>/ {total}{station.stage === "DUMBBELLS" && " пар"}</span>
-                      </p>
+                      {station.stage === "INVENTORY" ?
+                        <p className="stage-score inventory-score" role="status" data-full={placed === total || undefined}>
+                          {placed === total ? <>Всё на месте <Icon name="check" size={18} /></>
+                            : <>Осталось <strong key={placed}>{total - placed}</strong></>}
+                        </p> :
+                        <p className="stage-score" data-full={placed === total || undefined} aria-label={"Выполнено " + placed + " из " + total}>
+                          <Icon name="check" size={18} /><strong key={placed}>{placed}</strong>
+                          <span>/ {total}{station.stage === "DUMBBELLS" && " пар"}</span>
+                        </p>}
                     </div>
                   </div>
-                  <GameHelp.Provider value={lesson ? null : {
+                  <GameHelp.Provider value={lesson || completing ? null : {
                     open: (options) => setOverlay({ kind: "help", options }),
                     showExample: (example) => setOverlay({ kind: "example", example }),
                     paused: Boolean(overlay),
                   }}>
-                    <StationBoard station={station} progress={session} submit={action} coach={coach} inputMode={inputMode} />
+                    <div inert={completing}>
+                      <StationBoard station={station} progress={session} submit={action} coach={coach}
+                        inputMode={inputMode} onExit={closeApproach} />
+                    </div>
                   </GameHelp.Provider>
                 </div>
-                {sceneResult && <SceneResult heading={heading} stage={station.stage} next={returnToRoute} />}
+                {sceneResult && (station.stage === "DUMBBELLS" || station.stage === "BARBELL") &&
+                  <SceneResult heading={heading} stage={station.stage} next={returnToRoute} />}
               </section>
             )}
           </main>

@@ -29,36 +29,37 @@ export async function activate(page: Page, name: string, touch = false) {
   else await control.click();
 }
 
+export async function openRoute(page: Page, touch = false) {
+  await activate(page, "Точка старта", touch);
+  await activate(page, "Открыть маршрут", touch);
+}
+
 export async function begin(page: Page, touch = false) {
-  for (const name of ["Открыть игру", "Начать игру", "Начать"]) await activate(page, name, touch);
+  await openRoute(page, touch);
+  await activate(page, "Начать", touch);
+}
+
+export async function enterInventory(page: Page, touch = false, rng?: number) {
+  if (rng !== undefined) {
+    await page.evaluate((value) => {
+      const original = Math.random;
+      Math.random = () => value;
+      window.addEventListener("first-approach-analytics", () => { Math.random = original; }, { once: true });
+    }, rng);
+  }
+  await activate(page, "К станции", touch);
+}
+
+export async function looseInventory(page: Page) {
+  const ids = await page.locator('.storage-floor [data-location="FLOOR"]').evaluateAll(
+    (items) => items.map((item) => item.getAttribute("data-scene-item")),
+  );
+  return placements.inventory.filter(([id]) => ids.includes(id));
 }
 
 export async function keyboardPlace(page: Page, [item, target]: readonly [string, string]) {
   await prop(page, item).press("Space");
   await dropTarget(page, target).press("Space");
-}
-
-export async function solveChallenge(page: Page, touch = false) {
-  const challenge = page.locator("[data-challenge]");
-  await expect(challenge).toBeVisible();
-  const stage = await challenge.getAttribute("data-challenge");
-  const move = (pair: readonly [string, string]) => touch ? dragProp(page, pair, true) : keyboardPlace(page, pair);
-  if (stage === "BENCH") {
-    await openBench(page);
-    if (touch) await adjustBench(page, true, true, 29);
-    else await keyboardBench(page);
-  } else if (stage === "BARBELL") {
-    for (const pair of [
-      ["DISK_20_A", "LEFT"], ["DISK_20_B", "RIGHT"], ["DISK_5_A", "LEFT"],
-      ["DISK_5_B", "RIGHT"], ["LOCK_A", "LEFT"], ["LOCK_B", "RIGHT"],
-    ] as const) await move(pair);
-    for (const name of ["Защёлкнуть левый замок", "Защёлкнуть правый замок", "Проверить"]) await activate(page, name, touch);
-  } else {
-    const pending = stage === "DUMBBELLS" ? placements.dumbbells.slice(2, 4)
-      : placements.inventory.filter(([item]) => ["PLATE_15", "BAND_1", "ROLLER_2"].includes(item));
-    for (const pair of pending) await move(pair);
-  }
-  await expect(challenge.getByRole("status")).toHaveText("Контрольная ситуация пройдена.");
 }
 
 export async function dragProp(page: Page, [item, target]: readonly [string, string], touch = false) {

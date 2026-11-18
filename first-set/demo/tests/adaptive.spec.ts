@@ -1,10 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
-import { activate, adjustBenchWithMouse, begin, button, dragProp, dropTarget, keyboardBench, openBench } from "./controls";
+import { activate, adjustBenchWithMouse, begin, button, dragProp, dropTarget, keyboardBench, openBench, openRoute } from "./controls";
 
 async function resumeBench(page: Page) {
   await page.addInitScript(() => localStorage.setItem("ddx-first-approach-completed-v1", "2"));
   await page.goto("");
-  await activate(page, "Открыть игру");
+  await openRoute(page);
   await activate(page, "К станции");
 }
 
@@ -63,7 +63,7 @@ test("сбой загрузки 3D оставляет рабочую схему,
   page.on("request", (request) => { if (request.url().includes("/art/")) requested.push(request.url()); });
   await page.route("**/art/bench.glb", (route) => route.abort());
   await page.goto("");
-  await expect(button(page, "Открыть игру")).toBeVisible();
+  await expect(button(page, "Точка старта")).toBeVisible();
   expect(requested).not.toEqual(expect.arrayContaining([expect.stringContaining("/art/bench.glb")]));
   expect(requested).not.toEqual(expect.arrayContaining([expect.stringContaining("/art/dumbbell-rack-empty.webp")]));
   await resumeBench(page);
@@ -74,4 +74,15 @@ test("сбой загрузки 3D оставляет рабочую схему,
   await activate(page, "К сиденью");
   await keyboardBench(page);
   await expect(page.getByText("Скамья настроена: спинка и сиденье зафиксированы.")).toBeVisible();
+});
+
+test("при сбое загрузки игровой сцены можно вернуться в Точку старта", async ({ page, isMobile }) => {
+  await page.route("**/assets/gym-*.js", (route) => route.abort());
+  await page.goto("");
+  await begin(page, isMobile);
+  await expect(page.getByRole("alert")).toContainText("Станция не загрузилась");
+  await activate(page, "В Точку старта", isMobile);
+  await expect(page.getByRole("heading", { name: "Точка старта" })).toBeVisible();
+  await activate(page, "Главная", isMobile);
+  await expect(button(page, "Точка старта")).toBeVisible();
 });
